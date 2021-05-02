@@ -17,6 +17,8 @@ from torch.autograd import Variable
 from model_search import Network
 from architect import Architect
 
+from sklearn.model_selection import train_test_split
+
 
 parser = argparse.ArgumentParser("cifar")
 parser.add_argument('--data', type=str, default='../data', help='location of the data corpus')
@@ -42,6 +44,8 @@ parser.add_argument('--train_portion', type=float, default=0.5, help='portion of
 parser.add_argument('--unrolled', action='store_true', default=False, help='use one-step unrolled validation loss')
 parser.add_argument('--arch_learning_rate', type=float, default=6e-4, help='learning rate for arch encoding')
 parser.add_argument('--arch_weight_decay', type=float, default=1e-3, help='weight decay for arch encoding')
+parser.add_argument('--subsample', type=float, default=0, help='Sub sample proportion from 0 to 1. Use it to reduce '
+                                                               'number of samples')
 args = parser.parse_args()
 
 args.save = 'search-{}-{}'.format(args.save, time.strftime("%Y%m%d-%H%M%S"))
@@ -90,18 +94,24 @@ def main():
   else:
       train_data = dset.CIFAR10(root=args.data, train=True, download=True, transform=train_transform)
 
-  num_train = len(train_data)
+  targets = train_data.targets
+  train_idx, _ = train_test_split(
+    np.arange(len(targets)),
+    test_size= 1 - args.subsample,
+    shuffle=True,
+    stratify=targets)
+  num_train = len(train_idx)
   indices = list(range(num_train))
   split = int(np.floor(args.train_portion * num_train))
 
   train_queue = torch.utils.data.DataLoader(
       train_data, batch_size=args.batch_size,
-      sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
+      sampler=torch.utils.data.sampler.SubsetRandomSampler(train_idx[indices[:split]]),
       pin_memory=True, num_workers=2)
 
   valid_queue = torch.utils.data.DataLoader(
       train_data, batch_size=args.batch_size,
-      sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]),
+      sampler=torch.utils.data.sampler.SubsetRandomSampler(train_idx[indices[split:num_train]]),
       pin_memory=True, num_workers=2)
 
   scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
@@ -122,7 +132,7 @@ def main():
     print(F.softmax(model.betas_normal[2:5], dim=-1))
     #model.drop_path_prob = args.drop_path_prob * epoch / args.epochs
     # training
-    train_acc, train_obj = train(train_queue, valid_queue, model, architect, criterion, optimizer, lr,epoch)
+    train_acc, train_obj = train(train_queue, valid_queue, model, architect, criterion, optimizer, lr, epoch)
     logging.info('train_acc %f', train_acc)
 
     # validation
