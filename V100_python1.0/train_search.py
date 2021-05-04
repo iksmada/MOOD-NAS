@@ -13,56 +13,21 @@ import torch.nn.functional as F
 import torchvision.datasets as dset
 import torch.backends.cudnn as cudnn
 
-from torch.autograd import Variable
 from model_search import Network
 from architect import Architect
 
 from sklearn.model_selection import train_test_split
 
+TRAIN_ACC = "train_acc"
+VALID_ACC = "valid_acc"
+REG_LOSS = "reg_loss"
+CRITERION_LOSS = "criterion_loss"
 
-parser = argparse.ArgumentParser("cifar")
-parser.add_argument('--data', type=str, default='../data', help='location of the data corpus')
-parser.add_argument('--set', type=str, default='cifar10', help='location of the data corpus')
-parser.add_argument('--batch_size', type=int, default=256, help='batch size')
-parser.add_argument('--learning_rate', type=float, default=0.1, help='init learning rate')
-parser.add_argument('--learning_rate_min', type=float, default=0.001, help='min learning rate')
-parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
-parser.add_argument('--weight_decay', type=float, default=3e-4, help='weight decay')
-parser.add_argument('--report_freq', type=float, default=50, help='report frequency')
-parser.add_argument('--gpu', type=int, default=0, help='gpu device id')
-parser.add_argument('--epochs', type=int, default=50, help='num of training epochs')
-parser.add_argument('--init_channels', type=int, default=16, help='num of init channels')
-parser.add_argument('--layers', type=int, default=8, help='total number of layers')
-parser.add_argument('--model_path', type=str, default='saved_models', help='path to save the model')
-parser.add_argument('--cutout', action='store_true', default=False, help='use cutout')
-parser.add_argument('--cutout_length', type=int, default=16, help='cutout length')
-parser.add_argument('--drop_path_prob', type=float, default=0.3, help='drop path probability')
-parser.add_argument('--save', type=str, default='EXP', help='experiment name')
-parser.add_argument('--seed', type=int, default=2, help='random seed')
-parser.add_argument('--grad_clip', type=float, default=5, help='gradient clipping')
-parser.add_argument('--train_portion', type=float, default=0.5, help='portion of training data')
-parser.add_argument('--unrolled', action='store_true', default=False, help='use one-step unrolled validation loss')
-parser.add_argument('--arch_learning_rate', type=float, default=6e-4, help='learning rate for arch encoding')
-parser.add_argument('--arch_weight_decay', type=float, default=1e-3, help='weight decay for arch encoding')
-parser.add_argument('--subsample', type=float, default=0, help='Sub sample proportion from 0 to 1. Use it to reduce '
-                                                               'number of samples')
-args = parser.parse_args()
-
-args.save = 'search-{}-{}'.format(args.save, time.strftime("%Y%m%d-%H%M%S"))
-utils.create_exp_dir(args.save, scripts_to_save=glob.glob('*.py'))
-
-log_format = '%(asctime)s %(message)s'
-logging.basicConfig(stream=sys.stdout, level=logging.INFO,
-    format=log_format, datefmt='%m/%d %I:%M:%S %p')
-fh = logging.FileHandler(os.path.join(args.save, 'log.txt'))
-fh.setFormatter(logging.Formatter(log_format))
-logging.getLogger().addHandler(fh)
-
-
-CIFAR_CLASSES = 10
-if args.set=='cifar100':
+def main(args):
+  CIFAR_CLASSES = 10
+  if args.set == 'cifar100':
     CIFAR_CLASSES = 100
-def main():
+
   if not torch.cuda.is_available():
     logging.info('no gpu device available')
     sys.exit(1)
@@ -119,6 +84,10 @@ def main():
 
   architect = Architect(model, args)
 
+  train_acc = None
+  valid_acc = None
+  reg_loss = torch.zeros(1)
+  criterion_loss = None
   for epoch in range(args.epochs):
     scheduler.step()
     lr = scheduler.get_lr()[0]
@@ -132,22 +101,35 @@ def main():
     print(F.softmax(model.betas_normal[2:5], dim=-1))
     #model.drop_path_prob = args.drop_path_prob * epoch / args.epochs
     # training
-    train_acc, train_obj = train(train_queue, valid_queue, model, architect, criterion, optimizer, lr, epoch)
+    train_acc, train_obj, reg_loss, criterion_loss = train(train_queue, valid_queue, model, architect, criterion,
+                                                           optimizer, lr, epoch, args.grad_clip, args.report_freq,
+                                                           args.unrolled, l1_weight=args.reg_weight)
     logging.info('train_acc %f', train_acc)
+    logging.info('reg_loss %f', reg_loss)
+    logging.info('criterion_loss %f', criterion_loss)
 
     # validation
     if args.epochs-epoch<=1:
-      valid_acc, valid_obj = infer(valid_queue, model, criterion)
+      valid_acc, valid_obj = infer(valid_queue, model, criterion, args.report_freq)
       logging.info('valid_acc %f', valid_acc)
 
     utils.save(model, os.path.join(args.save, 'weights.pt'))
+  return {args.reg_weight: {
+    TRAIN_ACC: train_acc,
+    VALID_ACC: valid_acc,
+    REG_LOSS: reg_loss.cpu().data.item(),
+    CRITERION_LOSS: criterion_loss.cpu().data.item(),
+  }}
 
 
-def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr,epoch):
+def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr, epoch, grad_clip, report_freq, unrolled,
+          l1_weight=0):
   objs = utils.AvgrageMeter()
   top1 = utils.AvgrageMeter()
   top5 = utils.AvgrageMeter()
 
+  criterion_loss = 0
+  reg_loss = 0
   for step, (input, target) in enumerate(train_queue):
     model.train()
     n = input.size(0)
@@ -165,14 +147,18 @@ def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr,e
     target_search = target_search.cuda(non_blocking=True)
 
     if epoch>=15:
-      architect.step(input, target, input_search, target_search, lr, optimizer, unrolled=args.unrolled)
+      architect.step(input, target, input_search, target_search, lr, optimizer, unrolled=unrolled)
 
     optimizer.zero_grad()
     logits = model(input)
-    loss = criterion(logits, target)
+    criterion_loss = criterion(logits, target)
+    loss = criterion_loss
+    if l1_weight > 0:
+      reg_loss = calc_l1(model)
+      loss += l1_weight * reg_loss
 
     loss.backward()
-    nn.utils.clip_grad_norm(model.parameters(), args.grad_clip)
+    nn.utils.clip_grad_norm(model.parameters(), grad_clip)
     optimizer.step()
 
     prec1, prec5 = utils.accuracy(logits, target, topk=(1, 5))
@@ -180,13 +166,21 @@ def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr,e
     top1.update(prec1.data.item(), n)
     top5.update(prec5.data.item(), n)
 
-    if step % args.report_freq == 0:
+    if step % report_freq == 0:
       logging.info('train %03d %e %f %f', step, objs.avg, top1.avg, top5.avg)
 
-  return top1.avg, objs.avg
+  return top1.avg, objs.avg, reg_loss, criterion_loss
 
 
-def infer(valid_queue, model, criterion):
+def calc_l1(model):
+  l1_penalty = nn.L1Loss(reduction='sum')
+  reg_loss = 0
+  for param in model.parameters():
+    reg_loss += l1_penalty(param, torch.zeros(param.size()).cuda())
+  return reg_loss
+
+
+def infer(valid_queue, model, criterion, report_freq):
   objs = utils.AvgrageMeter()
   top1 = utils.AvgrageMeter()
   top5 = utils.AvgrageMeter()
@@ -205,12 +199,56 @@ def infer(valid_queue, model, criterion):
       top1.update(prec1.data.item(), n)
       top5.update(prec5.data.item(), n)
 
-      if step % args.report_freq == 0:
+      if step % report_freq == 0:
         logging.info('valid %03d %e %f %f', step, objs.avg, top1.avg, top5.avg)
 
   return top1.avg, objs.avg
 
 
+def create_parser():
+  parser = argparse.ArgumentParser("cifar")
+  parser.add_argument('--data', type=str, default='../data', help='location of the data corpus')
+  parser.add_argument('--set', type=str, default='cifar10', help='location of the data corpus')
+  parser.add_argument('--batch_size', type=int, default=256, help='batch size')
+  parser.add_argument('--learning_rate', type=float, default=0.1, help='init learning rate')
+  parser.add_argument('--learning_rate_min', type=float, default=0.001, help='min learning rate')
+  parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
+  parser.add_argument('--weight_decay', type=float, default=3e-4, help='weight decay')
+  parser.add_argument('--report_freq', type=float, default=50, help='report frequency')
+  parser.add_argument('--gpu', type=int, default=0, help='gpu device id')
+  parser.add_argument('--epochs', type=int, default=50, help='num of training epochs')
+  parser.add_argument('--init_channels', type=int, default=16, help='num of init channels')
+  parser.add_argument('--layers', type=int, default=8, help='total number of layers')
+  parser.add_argument('--model_path', type=str, default='saved_models', help='path to save the model')
+  parser.add_argument('--cutout', action='store_true', default=False, help='use cutout')
+  parser.add_argument('--cutout_length', type=int, default=16, help='cutout length')
+  parser.add_argument('--drop_path_prob', type=float, default=0.3, help='drop path probability')
+  parser.add_argument('--save', type=str, default='EXP', help='experiment name')
+  parser.add_argument('--seed', type=int, default=2, help='random seed')
+  parser.add_argument('--grad_clip', type=float, default=5, help='gradient clipping')
+  parser.add_argument('--train_portion', type=float, default=0.5, help='portion of training data')
+  parser.add_argument('--unrolled', action='store_true', default=False, help='use one-step unrolled validation loss')
+  parser.add_argument('--arch_learning_rate', type=float, default=6e-4, help='learning rate for arch encoding')
+  parser.add_argument('--arch_weight_decay', type=float, default=1e-3, help='weight decay for arch encoding')
+  parser.add_argument('--subsample', type=float, default=0, help='Sub sample proportion from 0 to 1. Use it to reduce '
+                                                                 'number of samples')
+  return parser
+
+
 if __name__ == '__main__':
-  main() 
+  parser = create_parser()
+  parser.add_argument('-rw', '--reg_weight', type=float, default=0.0,
+                      help='Regularization weight (positive value) to add to the model')
+
+  args = parser.parse_args()
+  args.save = 'search-{}-{}'.format(args.save, time.strftime("%Y%m%d-%H%M%S"))
+  utils.create_exp_dir(args.save, scripts_to_save=glob.glob('*.py'))
+
+  log_format = '%(asctime)s %(message)s'
+  logging.basicConfig(stream=sys.stdout, level=logging.INFO,
+                      format=log_format, datefmt='%m/%d %H:%M:%S')
+  fh = logging.FileHandler(os.path.join(args.save, 'log.txt'))
+  fh.setFormatter(logging.Formatter(log_format))
+  logging.getLogger().addHandler(fh)
+  main(args)
 
