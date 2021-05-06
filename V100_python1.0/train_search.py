@@ -61,11 +61,13 @@ def main(args):
         train_data = dset.CIFAR10(root=args.data, train=True, download=True, transform=train_transform)
 
     targets = train_data.targets
-    train_idx, _ = train_test_split(
-        np.arange(len(targets)),
-        test_size=1 - args.subsample,
-        shuffle=True,
-        stratify=targets)
+    train_idx = np.arange(len(targets))
+    if args.subsample > 0:
+        train_idx, _ = train_test_split(
+            train_idx,
+            test_size=1 - args.subsample,
+            shuffle=True,
+            stratify=targets)
     num_train = len(train_idx)
     indices = list(range(num_train))
     split = int(np.floor(args.train_portion * num_train))
