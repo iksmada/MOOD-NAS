@@ -1,0 +1,6 @@
+torch
+torchvision
+torchaudio
+matplotlib
+scipy
+scikit-learn
