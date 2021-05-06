@@ -48,7 +48,7 @@ if __name__ == '__main__':
     # Plot the data
     cmap = get_cmap(len(reg_losses)+1)
     for i, (x, y, w) in enumerate(zip(reg_losses, criterion_losses, hist.keys())):
-        plt.scatter(x, y, c=cmap(i), label="w = %.0E" % w)
+        plt.scatter(x, y, color=cmap(i), label="w = %.0E" % w)
 
     # Add a legend
     plt.legend()
