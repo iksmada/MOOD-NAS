@@ -1,4 +1,3 @@
-import glob
 import logging
 import os
 import sys
@@ -23,7 +22,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     args.save = 'multi-search-{}-{}'.format(args.save, time.strftime("%Y%m%d-%H%M%S"))
-    utils.create_exp_dir(args.save, scripts_to_save=glob.glob('*.py'))
+    utils.create_exp_dir(args.save, scripts_to_save=None)
     log_format = '%(asctime)s %(message)s'
     logging.basicConfig(stream=sys.stdout, level=logging.INFO,
                         format=log_format, datefmt='%m/%d %H:%M:%S')

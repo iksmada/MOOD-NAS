@@ -1,14 +1,13 @@
 import os
 import sys
 import time
-import glob
 import numpy as np
 import torch
+from torch.utils.data import DataLoader
 import utils
 import logging
 import argparse
 import torch.nn as nn
-import torch.utils
 import torch.nn.functional as F
 import torchvision.datasets as dset
 import torch.backends.cudnn as cudnn
@@ -72,18 +71,18 @@ def main(args):
     indices = list(range(num_train))
     split = int(np.floor(args.train_portion * num_train))
 
-    train_queue = torch.utils.data.DataLoader(
+    train_queue = DataLoader(
         train_data, batch_size=args.batch_size,
         sampler=torch.utils.data.sampler.SubsetRandomSampler(train_idx[indices[:split]]),
-        pin_memory=True, num_workers=2)
+        pin_memory=True, num_workers=4)
 
     valid_queue = torch.utils.data.DataLoader(
         train_data, batch_size=args.batch_size,
         sampler=torch.utils.data.sampler.SubsetRandomSampler(train_idx[indices[split:num_train]]),
-        pin_memory=True, num_workers=2)
+        pin_memory=True, num_workers=4)
 
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, float(args.epochs), eta_min=args.learning_rate_min)
+        optimizer, args.epochs, eta_min=args.learning_rate_min)
 
     architect = Architect(model, args)
 
@@ -246,7 +245,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     args.save = 'search-{}-{}'.format(args.save, time.strftime("%Y%m%d-%H%M%S"))
-    utils.create_exp_dir(args.save, scripts_to_save=glob.glob('*.py'))
+    utils.create_exp_dir(args.save, scripts_to_save=None)
 
     log_format = '%(asctime)s %(message)s'
     logging.basicConfig(stream=sys.stdout, level=logging.INFO,
