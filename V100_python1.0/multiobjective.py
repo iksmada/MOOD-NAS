@@ -34,7 +34,6 @@ if __name__ == '__main__':
     hist = {}
     for weight in weight_list:
         args.reg_weight = weight
-        logging.info("Running train_search main with %s" % args)
         stats = main(args)
         if stats[weight].get(TRAIN_ACC) is not None:
             hist.update(stats)
