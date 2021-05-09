@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader
 import utils
 import logging
 import argparse
+from apex import amp
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.datasets as dset
@@ -44,10 +45,6 @@ def main(args):
     criterion = nn.CrossEntropyLoss()
     criterion = criterion.cuda()
     model = Network(args.init_channels, CIFAR_CLASSES, args.layers, criterion)
-    model.half()  # convert to half precision
-    for layer in model.modules():
-        if isinstance(layer, nn.BatchNorm2d):
-            layer.float()
     model = model.cuda()
     logging.info("param size = %fMB", utils.count_parameters_in_MB(model))
 
@@ -56,6 +53,7 @@ def main(args):
         args.learning_rate,
         momentum=args.momentum,
         weight_decay=args.weight_decay)
+    model, optimizer = amp.initialize(model, optimizer)
 
     train_transform, valid_transform = utils._data_transforms_cifar10(args)
     if args.set == 'cifar100':
@@ -139,7 +137,7 @@ def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr, 
     for step, (input, target) in enumerate(train_queue):
         model.train()
         n = input.size(0)
-        input = input.cuda().type(torch.cuda.HalfTensor)
+        input = input.cuda()
         target = target.cuda(non_blocking=True)
 
         # get a random minibatch from the search queue with replacement
@@ -163,7 +161,8 @@ def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr, 
             reg_loss = calc_l1(model)
             loss += l1_weight * reg_loss
 
-        loss.backward()
+        with amp.scale_loss(loss, optimizer) as scaled_loss:
+            scaled_loss.backward()
         nn.utils.clip_grad_norm(model.parameters(), grad_clip)
         optimizer.step()
 
