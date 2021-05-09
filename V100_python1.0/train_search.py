@@ -95,7 +95,6 @@ def main(args):
     reg_loss = torch.zeros(1)
     criterion_loss = None
     for epoch in range(args.epochs):
-        scheduler.step()
         lr = scheduler.get_lr()[0]
         logging.info('epoch %d lr %e', epoch, lr)
 
@@ -110,6 +109,7 @@ def main(args):
         train_acc, train_obj, reg_loss, criterion_loss = train(train_queue, valid_queue, model, architect, criterion,
                                                                optimizer, lr, epoch, args.grad_clip, args.report_freq,
                                                                args.unrolled, l1_weight=args.reg_weight)
+        scheduler.step()
         logging.info('train_acc %f', train_acc)
         logging.info('reg_loss %f', reg_loss)
         logging.info('criterion_loss %f', criterion_loss)
@@ -164,7 +164,7 @@ def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr, 
             loss += l1_weight * reg_loss
 
         loss.backward()
-        nn.utils.clip_grad_norm(model.parameters(), grad_clip)
+        nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
         optimizer.step()
 
         prec1, prec5 = utils.accuracy(logits, target, topk=(1, 5))
