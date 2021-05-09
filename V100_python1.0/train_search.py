@@ -178,7 +178,7 @@ def calc_l1(model):
     l1_penalty = nn.L1Loss(reduction='sum')
     reg_loss = 0
     for param in model.parameters():
-        reg_loss += l1_penalty(param, torch.zeros(param.size()).cuda())
+        reg_loss += l1_penalty(param, torch.zeros(param.size(), device=torch.device('cuda:0')))
     return reg_loss
 
 
