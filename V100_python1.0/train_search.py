@@ -53,7 +53,7 @@ def main(args):
         args.learning_rate,
         momentum=args.momentum,
         weight_decay=args.weight_decay)
-    model, optimizer = amp.initialize(model, optimizer)
+    model, optimizer = amp.initialize(model, optimizer, opt_level="O2")
 
     train_transform, valid_transform = utils._data_transforms_cifar10(args)
     if args.set == 'cifar100':
@@ -163,7 +163,7 @@ def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr, 
 
         with amp.scale_loss(loss, optimizer) as scaled_loss:
             scaled_loss.backward()
-        nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+        nn.utils.clip_grad_norm_(amp.master_params(optimizer), grad_clip)
         optimizer.step()
 
         prec1, prec5 = utils.accuracy(logits, target, topk=(1, 5))
