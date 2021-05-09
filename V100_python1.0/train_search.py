@@ -149,7 +149,7 @@ def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr, 
         except:
             valid_queue_iter = iter(valid_queue)
             input_search, target_search = next(valid_queue_iter)
-        input_search = input_search.cuda()
+        input_search = input_search.cuda().type(torch.cuda.HalfTensor)
         target_search = target_search.cuda(non_blocking=True)
 
         if epoch >= 15:
@@ -194,7 +194,7 @@ def infer(valid_queue, model, criterion, report_freq):
 
     with torch.no_grad():
         for step, (input, target) in enumerate(valid_queue):
-            input = input.cuda()
+            input = input.cuda().type(torch.cuda.HalfTensor)
             target = target.cuda(non_blocking=True)
             logits = model(input)
             loss = criterion(logits, target)
