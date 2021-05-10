@@ -91,9 +91,9 @@ def main(args):
     train_acc = None
     valid_acc = None
     reg_loss = torch.zeros(1)
-    criterion_loss = None
+    criterion_loss = torch.zeros(1)
     for epoch in range(args.epochs):
-        lr = scheduler.get_lr()[0]
+        lr = scheduler.get_last_lr()[0]
         logging.info('epoch %d lr %e', epoch, lr)
 
         genotype = model.genotype()
@@ -132,8 +132,8 @@ def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr, 
     top1 = utils.AvgrageMeter()
     top5 = utils.AvgrageMeter()
 
-    criterion_loss = 0
-    reg_loss = 0
+    criterion_loss = torch.zeros(1)
+    reg_loss = torch.zeros(1)
     for step, (input, target) in enumerate(train_queue):
         model.train()
         n = input.size(0)
@@ -181,7 +181,7 @@ def calc_l1(model):
     l1_penalty = nn.L1Loss(reduction='sum')
     reg_loss = 0
     for param in model.parameters():
-        reg_loss += l1_penalty(param, torch.zeros(param.size()).cuda())
+        reg_loss += l1_penalty(param, torch.zeros(param.size(), device=torch.device('cuda:0')))
     return reg_loss
 
 
