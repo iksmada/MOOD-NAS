@@ -7,9 +7,7 @@ from torch.utils.data import DataLoader
 import utils
 import logging
 import argparse
-from apex import amp
 import torch.nn as nn
-import torch.nn.functional as F
 import torchvision.datasets as dset
 import torch.backends.cudnn as cudnn
 
@@ -53,7 +51,6 @@ def main(args):
         args.learning_rate,
         momentum=args.momentum,
         weight_decay=args.weight_decay)
-    model, optimizer = amp.initialize(model, optimizer, opt_level="O2")
 
     train_transform, valid_transform = utils._data_transforms_cifar10(args)
     if args.set == 'cifar100':
@@ -92,6 +89,7 @@ def main(args):
     valid_acc = None
     reg_loss = torch.zeros(1)
     criterion_loss = torch.zeros(1)
+    scaler = torch.cuda.amp.GradScaler()
     for epoch in range(args.epochs):
         lr = scheduler.get_last_lr()[0]
         logging.info('epoch %d lr %e', epoch, lr)
@@ -99,14 +97,11 @@ def main(args):
         genotype = model.genotype()
         logging.info('genotype = %s', genotype)
 
-        print(F.softmax(model.alphas_normal, dim=-1))
-        print(F.softmax(model.alphas_reduce, dim=-1))
-        print(F.softmax(model.betas_normal[2:5], dim=-1))
         # model.drop_path_prob = args.drop_path_prob * epoch / args.epochs
         # training
         train_acc, train_obj, reg_loss, criterion_loss = train(train_queue, valid_queue, model, architect, criterion,
                                                                optimizer, lr, epoch, args.grad_clip, args.report_freq,
-                                                               args.unrolled, l1_weight=args.reg_weight)
+                                                               args.unrolled, scaler, l1_weight=args.reg_weight)
         scheduler.step()
         logging.info('train_acc %f', train_acc)
         logging.info('reg_loss %f', reg_loss)
@@ -127,7 +122,7 @@ def main(args):
 
 
 def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr, epoch, grad_clip, report_freq, unrolled,
-          l1_weight=0):
+          scaler, l1_weight=0):
     objs = utils.AvgrageMeter()
     top1 = utils.AvgrageMeter()
     top5 = utils.AvgrageMeter()
@@ -135,36 +130,42 @@ def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr, 
     criterion_loss = torch.zeros(1)
     reg_loss = torch.zeros(1)
     for step, (input, target) in enumerate(train_queue):
-        model.train()
-        n = input.size(0)
-        input = input.cuda()
-        target = target.cuda(non_blocking=True)
+        with torch.cuda.amp.autocast():
+            model.train()
+            n = input.size(0)
+            input = input.cuda()
+            target = target.cuda(non_blocking=True)
 
-        # get a random minibatch from the search queue with replacement
-        # input_search, target_search = next(iter(valid_queue))
-        try:
-            input_search, target_search = next(valid_queue_iter)
-        except:
-            valid_queue_iter = iter(valid_queue)
-            input_search, target_search = next(valid_queue_iter)
-        input_search = input_search.cuda()
-        target_search = target_search.cuda(non_blocking=True)
+            # get a random minibatch from the search queue with replacement
+            # input_search, target_search = next(iter(valid_queue))
+            try:
+                input_search, target_search = next(valid_queue_iter)
+            except:
+                valid_queue_iter = iter(valid_queue)
+                input_search, target_search = next(valid_queue_iter)
+            input_search = input_search.cuda()
+            target_search = target_search.cuda(non_blocking=True)
 
-        if epoch >= 15:
-            architect.step(input, target, input_search, target_search, lr, optimizer, unrolled=unrolled)
+            if epoch >= 15:
+                architect.step(input, target, input_search, target_search, lr, optimizer, unrolled=unrolled)
 
-        optimizer.zero_grad()
-        logits = model(input)
-        criterion_loss = criterion(logits, target)
-        loss = criterion_loss
-        if l1_weight > 0:
-            reg_loss = calc_l1(model)
-            loss += l1_weight * reg_loss
+            optimizer.zero_grad(set_to_none=True)
+            logits = model(input)
+            criterion_loss = criterion(logits, target)
+            loss = criterion_loss
+            if l1_weight > 0:
+                reg_loss = calc_l1(model)
+                loss += l1_weight * reg_loss
 
-        with amp.scale_loss(loss, optimizer) as scaled_loss:
-            scaled_loss.backward()
-        nn.utils.clip_grad_norm_(amp.master_params(optimizer), grad_clip)
-        optimizer.step()
+        scaler.scale(loss).backward()
+        # Unscales the gradients of optimizer's assigned params in-place
+        scaler.unscale_(optimizer)
+
+        # Since the gradients of optimizer's assigned params are now unscaled, clips as usual.
+        # You may use the same value for max_norm here as you would without gradient scaling.
+        nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+        scaler.step(optimizer)
+        scaler.update()
 
         prec1, prec5 = utils.accuracy(logits, target, topk=(1, 5))
         objs.update(loss.data.item(), n)
