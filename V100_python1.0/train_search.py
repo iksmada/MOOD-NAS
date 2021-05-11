@@ -8,7 +8,6 @@ import utils
 import logging
 import argparse
 import torch.nn as nn
-import torch.nn.functional as F
 import torchvision.datasets as dset
 import torch.backends.cudnn as cudnn
 
@@ -20,6 +19,9 @@ from sklearn.model_selection import train_test_split
 TRAIN_ACC = "train_acc"
 VALID_ACC = "valid_acc"
 REG_LOSS = "reg_loss"
+WEIGHT = "weight"
+L1_LOSS = "l1_loss"
+L2_LOSS = "l2_loss"
 CRITERION_LOSS = "criterion_loss"
 
 
@@ -88,7 +90,8 @@ def main(args):
 
     train_acc = None
     valid_acc = None
-    reg_loss = torch.zeros(1)
+    l1_loss = torch.zeros(1)
+    l2_loss = torch.zeros(1)
     criterion_loss = torch.zeros(1)
     for epoch in range(args.epochs):
         lr = scheduler.get_last_lr()[0]
@@ -97,17 +100,16 @@ def main(args):
         genotype = model.genotype()
         logging.info('genotype = %s', genotype)
 
-        print(F.softmax(model.alphas_normal, dim=-1))
-        print(F.softmax(model.alphas_reduce, dim=-1))
-        print(F.softmax(model.betas_normal[2:5], dim=-1))
         # model.drop_path_prob = args.drop_path_prob * epoch / args.epochs
         # training
-        train_acc, train_obj, reg_loss, criterion_loss = train(train_queue, valid_queue, model, architect, criterion,
-                                                               optimizer, lr, epoch, args.grad_clip, args.report_freq,
-                                                               args.unrolled, l1_weight=args.reg_weight)
+        train_acc, train_obj, l1_loss, l2_loss, criterion_loss = train(
+            train_queue, valid_queue, model, architect, criterion, optimizer, lr, epoch, args.grad_clip,
+            args.report_freq, args.unrolled, l1_weight=args.l1_weight, l2_weight=args.l2_weight
+        )
         scheduler.step()
         logging.info('train_acc %f', train_acc)
-        logging.info('reg_loss %f', reg_loss)
+        logging.info('%s %f', L1_LOSS, l1_loss)
+        logging.info('%s %f', L2_LOSS, l2_loss)
         logging.info('criterion_loss %f', criterion_loss)
 
         # validation
@@ -116,22 +118,35 @@ def main(args):
             logging.info('valid_acc %f', valid_acc)
 
         utils.save(model, os.path.join(args.save, 'weights.pt'))
-    return {args.reg_weight: {
-        TRAIN_ACC: train_acc,
-        VALID_ACC: valid_acc,
-        REG_LOSS: reg_loss.cpu().data.item(),
-        CRITERION_LOSS: criterion_loss.cpu().data.item(),
-    }}
+    return {
+        L1_LOSS: {
+            args.l1_weight: {
+                TRAIN_ACC: train_acc,
+                VALID_ACC: valid_acc,
+                REG_LOSS: l1_loss.cpu().data.item(),
+                CRITERION_LOSS: criterion_loss.cpu().data.item()
+            }
+        },
+        L2_LOSS: {
+            args.l2_weight: {
+                TRAIN_ACC: train_acc,
+                VALID_ACC: valid_acc,
+                REG_LOSS: l2_loss.cpu().data.item(),
+                CRITERION_LOSS: criterion_loss.cpu().data.item()
+            }
+        }
+    }
 
 
 def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr, epoch, grad_clip, report_freq, unrolled,
-          l1_weight=0):
+          l1_weight=0, l2_weight=0):
     objs = utils.AvgrageMeter()
     top1 = utils.AvgrageMeter()
     top5 = utils.AvgrageMeter()
 
     criterion_loss = torch.zeros(1)
-    reg_loss = torch.zeros(1)
+    l1_loss = torch.zeros(1)
+    l2_loss = torch.zeros(1)
     for step, (input, target) in enumerate(train_queue):
         model.train()
         n = input.size(0)
@@ -156,8 +171,11 @@ def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr, 
         criterion_loss = criterion(logits, target)
         loss = criterion_loss
         if l1_weight > 0:
-            reg_loss = calc_l1(model)
-            loss += l1_weight * reg_loss
+            l1_loss = param_loss(model, nn.L1Loss(reduction='sum'))
+            loss += l1_weight * l1_loss
+        if l2_weight > 0:
+            l2_loss = param_loss(model, nn.MSELoss(reduction='sum'))
+            loss += l2_weight * l2_loss
 
         loss.backward()
         nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
@@ -171,14 +189,13 @@ def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr, 
         if step % report_freq == 0:
             logging.info('train %03d %e %f %f', step, objs.avg, top1.avg, top5.avg)
 
-    return top1.avg, objs.avg, reg_loss, criterion_loss
+    return top1.avg, objs.avg, l1_loss, l2_loss, criterion_loss
 
 
-def calc_l1(model):
-    l1_penalty = nn.L1Loss(reduction='sum')
+def param_loss(model, penalty):
     reg_loss = 0
     for param in model.parameters():
-        reg_loss += l1_penalty(param, torch.zeros(param.size(), device=torch.device('cuda:0')))
+        reg_loss += penalty(param, torch.zeros(param.size(), device=torch.device('cuda:0')))
     return reg_loss
 
 
@@ -240,7 +257,9 @@ def create_parser():
 
 if __name__ == '__main__':
     parser = create_parser()
-    parser.add_argument('-rw', '--reg_weight', type=float, default=0.0,
+    parser.add_argument('-l1', '--l1_weight', type=float, default=0.0,
+                        help='Regularization weight (positive value) to add to the model')
+    parser.add_argument('-l2', '--l2_weight', type=float, default=0.0,
                         help='Regularization weight (positive value) to add to the model')
 
     args = parser.parse_args()
