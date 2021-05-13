@@ -122,10 +122,11 @@ def main(args):
         genotype = model.genotype()
         logging.info('genotype = %s', genotype)
 
+    logging.info('last genotype = %s', genotype)
     model = TrainNetwork(36, CIFAR_CLASSES, 20, False, genotype)
     model = model
     model_size_mb = utils.count_parameters_in_MB(model)
-    logging.info("param size = %.2fMB", model_size_mb)
+    logging.info("Train model param size = %.2fMB", model_size_mb)
 
     return {
         L1_LOSS: {
