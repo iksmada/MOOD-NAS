@@ -12,6 +12,7 @@ import torchvision.datasets as dset
 import torch.backends.cudnn as cudnn
 
 from model_search import Network
+from model import NetworkCIFAR as TrainNetwork
 from architect import Architect
 
 from sklearn.model_selection import train_test_split
@@ -23,6 +24,7 @@ WEIGHT = "weight"
 L1_LOSS = "l1_loss"
 L2_LOSS = "l2_loss"
 CRITERION_LOSS = "criterion_loss"
+SIZE = "model_size"
 
 
 def main(args):
@@ -93,12 +95,11 @@ def main(args):
     l1_loss = torch.zeros(1)
     l2_loss = torch.zeros(1)
     criterion_loss = torch.zeros(1)
+    genotype = model.genotype()
+    logging.info('initial genotype = %s', genotype)
     for epoch in range(args.epochs):
         lr = scheduler.get_last_lr()[0]
         logging.info('epoch %d lr %e', epoch, lr)
-
-        genotype = model.genotype()
-        logging.info('genotype = %s', genotype)
 
         # model.drop_path_prob = args.drop_path_prob * epoch / args.epochs
         # training
@@ -118,13 +119,22 @@ def main(args):
             logging.info('valid_acc %f', valid_acc)
 
         utils.save(model, os.path.join(args.save, 'weights.pt'))
+        genotype = model.genotype()
+        logging.info('genotype = %s', genotype)
+
+    model = TrainNetwork(36, CIFAR_CLASSES, 20, False, genotype)
+    model = model
+    model_size_mb = utils.count_parameters_in_MB(model)
+    logging.info("param size = %.2fMB", model_size_mb)
+
     return {
         L1_LOSS: {
             args.l1_weight: {
                 TRAIN_ACC: train_acc,
                 VALID_ACC: valid_acc,
                 REG_LOSS: l1_loss.cpu().data.item(),
-                CRITERION_LOSS: criterion_loss.cpu().data.item()
+                CRITERION_LOSS: criterion_loss.cpu().data.item(),
+                SIZE: model_size_mb
             }
         },
         L2_LOSS: {
@@ -132,7 +142,8 @@ def main(args):
                 TRAIN_ACC: train_acc,
                 VALID_ACC: valid_acc,
                 REG_LOSS: l2_loss.cpu().data.item(),
-                CRITERION_LOSS: criterion_loss.cpu().data.item()
+                CRITERION_LOSS: criterion_loss.cpu().data.item(),
+                SIZE: model_size_mb
             }
         }
     }
@@ -272,4 +283,4 @@ if __name__ == '__main__':
     fh = logging.FileHandler(os.path.join(args.save, 'log.txt'))
     fh.setFormatter(logging.Formatter(log_format))
     logging.getLogger().addHandler(fh)
-    main(args)
+    print(main(args))

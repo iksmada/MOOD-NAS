@@ -1,13 +1,13 @@
 import os
 import sys
 import time
-import glob
 import numpy as np
 import torch
 import utils
 import logging
 import argparse
 import torch.nn as nn
+import genotypes
 import torch.utils
 import torchvision.datasets as dset
 import torch.backends.cudnn as cudnn
@@ -39,7 +39,7 @@ parser.add_argument('--grad_clip', type=float, default=5, help='gradient clippin
 args = parser.parse_args()
 
 args.save = 'eval-{}-{}'.format(args.save, time.strftime("%Y%m%d-%H%M%S"))
-utils.create_exp_dir(args.save, scripts_to_save=glob.glob('*.py'))
+utils.create_exp_dir(args.save, scripts_to_save=None)
 
 log_format = '%(asctime)s %(message)s'
 logging.basicConfig(stream=sys.stdout, level=logging.INFO,
@@ -72,7 +72,7 @@ def main():
     model = Network(args.init_channels, CIFAR_CLASSES, args.layers, args.auxiliary, genotype)
     model = model.cuda()
 
-    logging.info("param size = %fMB", utils.count_parameters_in_MB(model))
+    logging.info("param size = %.2fMB", utils.count_parameters_in_MB(model))
 
     criterion = nn.CrossEntropyLoss()
     criterion = criterion.cuda()
