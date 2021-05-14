@@ -6,3 +6,4 @@ log.txt
 *.jpeg
 *.jpg
 .idea/
+*.pdf
