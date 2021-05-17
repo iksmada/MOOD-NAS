@@ -1,18 +1,30 @@
 import os
 import sys
 import time
+from collections import defaultdict
+
 import numpy as np
 import torch
+from matplotlib import pyplot as plt
+from torch.utils.data import DataLoader
+import torch.utils
+import torchvision.datasets as dset
+import torch.backends.cudnn as cudnn
+
 import utils
 import logging
 import argparse
 import torch.nn as nn
 import genotypes
-import torch.utils
-import torchvision.datasets as dset
-import torch.backends.cudnn as cudnn
 
 from model import NetworkCIFAR as Network
+
+TOP5 = 'top5'
+VAL_TOP5 = 'val_top5'
+VAL_LOSS = 'val_loss'
+VAL_ACCURACY = 'val_accuracy'
+LOSS = 'loss'
+ACCURACY = 'accuracy'
 
 parser = argparse.ArgumentParser("cifar")
 parser.add_argument('--data', type=str, default='../data', help='location of the data corpus')
@@ -93,26 +105,70 @@ def main():
     # train_data = dset.CIFAR10(root=args.data, train=True, download=True, transform=train_transform)
     # valid_data = dset.CIFAR10(root=args.data, train=False, download=True, transform=valid_transform)
 
-    train_queue = torch.utils.data.DataLoader(
+    train_queue = DataLoader(
         train_data, batch_size=args.batch_size, shuffle=True, pin_memory=True, num_workers=2)
 
-    valid_queue = torch.utils.data.DataLoader(
+    valid_queue = DataLoader(
         valid_data, batch_size=args.batch_size, shuffle=False, pin_memory=True, num_workers=2)
 
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, float(args.epochs))
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epochs)
 
+    history = defaultdict(list)
     for epoch in range(args.epochs):
         logging.info('epoch %d lr %e', epoch, scheduler.get_last_lr()[0])
         model.drop_path_prob = args.drop_path_prob * epoch / args.epochs
 
-        train_acc, train_obj = train(train_queue, model, criterion, optimizer)
+        train_acc, top5, train_obj = train(train_queue, model, criterion, optimizer)
         logging.info('train_acc %f', train_acc)
+        history[ACCURACY].append(train_acc)
+        history[TOP5].append(top5)
+        history[LOSS].append(train_obj)
         scheduler.step()
 
-        valid_acc, valid_obj = infer(valid_queue, model, criterion)
+        valid_acc, val_top5, valid_obj = infer(valid_queue, model, criterion)
         logging.info('valid_acc %f', valid_acc)
+        history[VAL_ACCURACY].append(valid_acc)
+        history[VAL_TOP5].append(val_top5)
+        history[VAL_LOSS].append(valid_obj)
 
         utils.save(model, os.path.join(args.save, 'weights.pt'))
+
+    print("history = %s" % history)
+    # Show the loss plot
+    plt.plot(history[LOSS], label="Train loss")
+    plt.plot(history[VAL_LOSS], label="Validation loss")
+    plt.title("Train and Validation loss per epoch")
+    plt.legend()
+    plt.xlabel('epoch', fontsize=12)
+    plt.yscale('log')
+    plt.ylabel('loss', fontsize=12)
+    plt.savefig(os.path.join(args.save, "loss.png"))
+    plt.show()
+    plt.clf()
+
+    # Show the acc plot
+    plt.plot(history[ACCURACY], label="Train accuracy")
+    plt.plot(history[VAL_ACCURACY], label="Validation accuracy")
+    plt.title("Train and Validation accuracy per epoch")
+    plt.legend()
+    plt.xlabel('epoch', fontsize=12)
+    plt.yscale('log')
+    plt.ylabel('loss', fontsize=12)
+    plt.savefig(os.path.join(args.save, "acc.png"))
+    plt.show()
+    plt.clf()
+
+    # Show the acc plot
+    plt.plot(history[TOP5], label="Train top5 acc")
+    plt.plot(history[VAL_TOP5], label="Validation top5 acc")
+    plt.title("Train and Validation top5 accuracy per epoch")
+    plt.legend()
+    plt.xlabel('epoch', fontsize=12)
+    plt.yscale('log')
+    plt.ylabel('loss', fontsize=12)
+    plt.savefig(os.path.join(args.save, "top5.png"))
+    plt.show()
+    plt.clf()
 
 
 def train(train_queue, model, criterion, optimizer):
@@ -144,7 +200,7 @@ def train(train_queue, model, criterion, optimizer):
         if step % args.report_freq == 0:
             logging.info('train %03d %e %f %f', step, objs.avg, top1.avg, top5.avg)
 
-    return top1.avg, objs.avg
+    return top1.avg, top5.avg, objs.avg
 
 
 def infer(valid_queue, model, criterion):
@@ -169,7 +225,7 @@ def infer(valid_queue, model, criterion):
             if step % args.report_freq == 0:
                 logging.info('valid %03d %e %f %f', step, objs.avg, top1.avg, top5.avg)
 
-    return top1.avg, objs.avg
+    return top1.avg, top5.avg, objs.avg
 
 
 if __name__ == '__main__':
