@@ -97,7 +97,7 @@ def main():
         weight_decay=args.weight_decay
     )
 
-    train_transform, valid_transform = utils._data_transforms_cifar10(args)
+    train_transform, test_transform = utils._data_transforms_cifar10(args)
     if args.set == 'cifar100':
         train_data = dset.CIFAR100(root=args.data, train=True, download=True, transform=train_transform)
         test_data = dset.CIFAR100(root=args.data, train=False, download=True, transform=test_transform)
@@ -226,7 +226,7 @@ def infer(test_queue, model, criterion):
             top5.update(prec5.data.item(), n)
 
             if step % args.report_freq == 0:
-                logging.info('valid %03d %e %f %f', step, objs.avg, top1.avg, top5.avg)
+                logging.info('test %03d %e %f %f', step, objs.avg, top1.avg, top5.avg)
 
     return top1.avg, top5.avg, objs.avg
 
