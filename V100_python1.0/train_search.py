@@ -250,7 +250,6 @@ def create_parser():
     parser.add_argument('--epochs', type=int, default=50, help='num of training epochs')
     parser.add_argument('--init_channels', type=int, default=16, help='num of init channels')
     parser.add_argument('--layers', type=int, default=8, help='total number of layers')
-    parser.add_argument('--model_path', type=str, default='saved_models', help='path to save the model')
     parser.add_argument('--cutout', action='store_true', default=False, help='use cutout')
     parser.add_argument('--cutout_length', type=int, default=16, help='cutout length')
     parser.add_argument('--drop_path_prob', type=float, default=0.3, help='drop path probability')
@@ -261,9 +260,8 @@ def create_parser():
     parser.add_argument('--unrolled', action='store_true', default=False, help='use one-step unrolled validation loss')
     parser.add_argument('--arch_learning_rate', type=float, default=6e-4, help='learning rate for arch encoding')
     parser.add_argument('--arch_weight_decay', type=float, default=1e-3, help='weight decay for arch encoding')
-    parser.add_argument('--subsample', type=float, default=0,
-                        help='Sub sample proportion from 0 to 1. Use it to reduce '
-                             'number of samples')
+    parser.add_argument('--subsample', type=float, default=0, help='Sub sample proportion from 0 to 1. Use it to reduce'
+                        ' number of samples')
     return parser
 
 

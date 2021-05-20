@@ -38,7 +38,7 @@ parser.add_argument('--gpu', type=int, default=0, help='gpu device id')
 parser.add_argument('--epochs', type=int, default=600, help='num of training epochs')
 parser.add_argument('--init_channels', type=int, default=36, help='num of init channels')
 parser.add_argument('--layers', type=int, default=20, help='total number of layers')
-parser.add_argument('--model_path', type=str, default='saved_models', help='path to save the model')
+parser.add_argument('--model_path', type=str, help='path to save the model')
 parser.add_argument('--auxiliary', action='store_true', default=False, help='use auxiliary tower')
 parser.add_argument('--auxiliary_weight', type=float, default=0.4, help='weight for auxiliary loss')
 parser.add_argument('--cutout', action='store_true', default=False, help='use cutout')
@@ -83,6 +83,8 @@ def main():
     genotype = genotypes.__dict__[args.arch]
     model = Network(args.init_channels, CIFAR_CLASSES, args.layers, args.auxiliary, genotype)
     model = model.cuda()
+    if args.model_path is not None:
+        utils.load(model, args.model_path)
 
     logging.info("param size = %.2fMB", utils.count_parameters_in_MB(model))
 
@@ -120,6 +122,7 @@ def main():
 
         train_acc, top5, train_obj = train(train_queue, model, criterion, optimizer)
         logging.info('train_acc %f', train_acc)
+        logging.info('train_loss %f', train_obj)
         history[ACCURACY].append(train_acc)
         history[TOP5].append(top5)
         history[LOSS].append(train_obj)
@@ -127,13 +130,13 @@ def main():
 
         valid_acc, val_top5, valid_obj = infer(valid_queue, model, criterion)
         logging.info('valid_acc %f', valid_acc)
+        logging.info('valid_loss %f', valid_obj)
         history[VAL_ACCURACY].append(valid_acc)
         history[VAL_TOP5].append(val_top5)
         history[VAL_LOSS].append(valid_obj)
 
         utils.save(model, os.path.join(args.save, 'weights.pt'))
 
-    print("history = %s" % history)
     # Show the loss plot
     plt.plot(history[LOSS], label="Train loss")
     plt.plot(history[VAL_LOSS], label="Validation loss")
@@ -152,8 +155,8 @@ def main():
     plt.title("Train and Validation accuracy per epoch")
     plt.legend()
     plt.xlabel('epoch', fontsize=12)
-    plt.yscale('log')
-    plt.ylabel('loss', fontsize=12)
+    plt.xscale('log')
+    plt.ylabel('accuracy', fontsize=12)
     plt.savefig(os.path.join(args.save, "acc.png"))
     plt.show()
     plt.clf()
@@ -164,7 +167,7 @@ def main():
     plt.title("Train and Validation top5 accuracy per epoch")
     plt.legend()
     plt.xlabel('epoch', fontsize=12)
-    plt.yscale('log')
+    plt.xscale('log')
     plt.ylabel('loss', fontsize=12)
     plt.savefig(os.path.join(args.save, "top5.png"))
     plt.show()
