@@ -20,9 +20,9 @@ import genotypes
 from model import NetworkCIFAR as Network
 
 TOP5 = 'top5'
-VAL_TOP5 = 'val_top5'
-VAL_LOSS = 'val_loss'
-VAL_ACCURACY = 'val_accuracy'
+TEST_TOP5 = 'test_top5'
+TEST_LOSS = 'test_loss'
+TEST_ACCURACY = 'test_accuracy'
 LOSS = 'loss'
 ACCURACY = 'accuracy'
 
@@ -100,18 +100,18 @@ def main():
     train_transform, valid_transform = utils._data_transforms_cifar10(args)
     if args.set == 'cifar100':
         train_data = dset.CIFAR100(root=args.data, train=True, download=True, transform=train_transform)
-        valid_data = dset.CIFAR100(root=args.data, train=False, download=True, transform=valid_transform)
+        test_data = dset.CIFAR100(root=args.data, train=False, download=True, transform=test_transform)
     else:
         train_data = dset.CIFAR10(root=args.data, train=True, download=True, transform=train_transform)
-        valid_data = dset.CIFAR10(root=args.data, train=False, download=True, transform=valid_transform)
+        test_data = dset.CIFAR10(root=args.data, train=False, download=True, transform=test_transform)
     # train_data = dset.CIFAR10(root=args.data, train=True, download=True, transform=train_transform)
-    # valid_data = dset.CIFAR10(root=args.data, train=False, download=True, transform=valid_transform)
+    # test_data = dset.CIFAR10(root=args.data, train=False, download=True, transform=test_transform)
 
     train_queue = DataLoader(
         train_data, batch_size=args.batch_size, shuffle=True, pin_memory=True, num_workers=2)
 
-    valid_queue = DataLoader(
-        valid_data, batch_size=args.batch_size, shuffle=False, pin_memory=True, num_workers=2)
+    test_queue = DataLoader(
+        test_data, batch_size=args.batch_size, shuffle=False, pin_memory=True, num_workers=2)
 
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epochs)
 
@@ -128,19 +128,19 @@ def main():
         history[LOSS].append(train_obj)
         scheduler.step()
 
-        valid_acc, val_top5, valid_obj = infer(valid_queue, model, criterion)
-        logging.info('valid_acc %f', valid_acc)
-        logging.info('valid_loss %f', valid_obj)
-        history[VAL_ACCURACY].append(valid_acc)
-        history[VAL_TOP5].append(val_top5)
-        history[VAL_LOSS].append(valid_obj)
+        test_acc, test_top5, test_obj = infer(test_queue, model, criterion)
+        logging.info('test_acc %f', test_acc)
+        logging.info('test_loss %f', test_obj)
+        history[TEST_ACCURACY].append(test_acc)
+        history[TEST_TOP5].append(test_top5)
+        history[TEST_LOSS].append(test_obj)
 
         utils.save(model, os.path.join(args.save, 'weights.pt'))
 
     # Show the loss plot
     plt.plot(history[LOSS], label="Train loss")
-    plt.plot(history[VAL_LOSS], label="Validation loss")
-    plt.title("Train and Validation loss per epoch")
+    plt.plot(history[TEST_LOSS], label="Test loss")
+    plt.title("Train and Test loss per epoch")
     plt.legend()
     plt.xlabel('epoch', fontsize=12)
     plt.yscale('log')
@@ -151,24 +151,24 @@ def main():
 
     # Show the acc plot
     plt.plot(history[ACCURACY], label="Train accuracy")
-    plt.plot(history[VAL_ACCURACY], label="Validation accuracy")
-    plt.title("Train and Validation accuracy per epoch")
+    plt.plot(history[TEST_ACCURACY], label="Test accuracy")
+    plt.title("Train and Test accuracy per epoch")
     plt.legend()
     plt.xlabel('epoch', fontsize=12)
     plt.xscale('log')
-    plt.ylabel('accuracy', fontsize=12)
+    plt.ylabel('accuracy %', fontsize=12)
     plt.savefig(os.path.join(args.save, "acc.png"))
     plt.show()
     plt.clf()
 
-    # Show the acc plot
+    # Show the top5 acc plot
     plt.plot(history[TOP5], label="Train top5 acc")
-    plt.plot(history[VAL_TOP5], label="Validation top5 acc")
-    plt.title("Train and Validation top5 accuracy per epoch")
+    plt.plot(history[TEST_TOP5], label="Test top5 acc")
+    plt.title("Train and Test top5 accuracy per epoch")
     plt.legend()
     plt.xlabel('epoch', fontsize=12)
     plt.xscale('log')
-    plt.ylabel('loss', fontsize=12)
+    plt.ylabel('accuracy %', fontsize=12)
     plt.savefig(os.path.join(args.save, "top5.png"))
     plt.show()
     plt.clf()
@@ -206,14 +206,14 @@ def train(train_queue, model, criterion, optimizer):
     return top1.avg, top5.avg, objs.avg
 
 
-def infer(valid_queue, model, criterion):
+def infer(test_queue, model, criterion):
     objs = utils.AvgrageMeter()
     top1 = utils.AvgrageMeter()
     top5 = utils.AvgrageMeter()
     model.eval()
 
     with torch.no_grad():
-        for step, (input, target) in enumerate(valid_queue):
+        for step, (input, target) in enumerate(test_queue):
             input = input.cuda()
             target = target.cuda(non_blocking=True)
             logits, _ = model(input)

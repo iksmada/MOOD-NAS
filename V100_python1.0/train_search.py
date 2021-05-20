@@ -57,7 +57,7 @@ def main(args):
         momentum=args.momentum,
         weight_decay=args.weight_decay)
 
-    train_transform, valid_transform = utils._data_transforms_cifar10(args)
+    train_transform, _ = utils._data_transforms_cifar10(args)
     if args.set == 'cifar100':
         train_data = dset.CIFAR100(root=args.data, train=True, download=True, transform=train_transform)
     else:
