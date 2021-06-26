@@ -207,7 +207,7 @@ def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr, 
 def param_loss(model, penalty):
     reg_loss = 0
     for param in model.parameters():
-        reg_loss += penalty(param, torch.zeros(param.size(), device=torch.device('cuda:0')))
+        reg_loss += penalty(param, torch.zeros(param.size(), device=torch.device('cuda')))
     return reg_loss
 
 

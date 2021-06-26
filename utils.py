@@ -37,6 +37,17 @@ def accuracy(output, target, topk=(1,)):
   return res
 
 
+def score_per_model(outputs: torch.Tensor, target) -> torch.Tensor:
+    pred = outputs.argmax(dim=2).t()
+    correct = pred.eq(target.view(1, -1).expand_as(pred)).t()
+    scores = [torch.zeros(outputs.size()[1], device=correct.device)]
+    for row in correct:
+        # if all values are true we point no one
+        if not row.all().data.item():
+            scores.append(row.float())
+    return torch.vstack(scores, out=None).sum(dim=0)
+
+
 class Cutout(object):
     def __init__(self, length):
         self.length = length
