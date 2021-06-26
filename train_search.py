@@ -238,7 +238,7 @@ def infer(valid_queue, model, criterion, report_freq):
 
 def create_parser():
     parser = argparse.ArgumentParser("cifar")
-    parser.add_argument('--data', type=str, default='../data', help='location of the data corpus')
+    parser.add_argument('--data', type=str, default='data', help='location of the data corpus')
     parser.add_argument('--set', type=str, default='cifar10', help='location of the data corpus')
     parser.add_argument('--batch_size', type=int, default=256, help='batch size')
     parser.add_argument('--learning_rate', type=float, default=0.1, help='init learning rate')
@@ -273,7 +273,7 @@ if __name__ == '__main__':
                         help='Regularization weight (positive value) to add to the model')
 
     args = parser.parse_args()
-    args.save = 'search-{}-{}'.format(args.save, time.strftime("%Y%m%d-%H%M%S"))
+    args.save = 'logs/search-{}-{}'.format(args.save, time.strftime("%Y%m%d-%H%M%S"))
     utils.create_exp_dir(args.save, scripts_to_save=None)
 
     log_format = '%(asctime)s %(message)s'

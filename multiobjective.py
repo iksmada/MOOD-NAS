@@ -26,7 +26,7 @@ if __name__ == '__main__':
                            help='Regularization weight list negative power of ten to try with the model')
     args = parser.parse_args()
 
-    args.save = 'multi-search-{}-{}'.format(args.save, time.strftime("%Y%m%d-%H%M%S"))
+    args.save = 'logs/multi-search-{}-{}'.format(args.save, time.strftime("%Y%m%d-%H%M%S"))
     utils.create_exp_dir(args.save, scripts_to_save=None)
     log_format = '%(asctime)s %(message)s'
     logging.basicConfig(stream=sys.stdout, level=logging.INFO,
