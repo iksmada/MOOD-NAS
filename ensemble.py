@@ -3,6 +3,7 @@ import sys
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
+from torch import tensor
 
 import genotypes
 import utils
@@ -31,8 +32,9 @@ parser.add_argument('--cutout', action='store_true', default=False, help='use cu
 parser.add_argument('--cutout_length', type=int, default=16, help='cutout length')
 parser.add_argument('--drop_path_prob', type=float, default=0.2, help='drop path probability')
 parser.add_argument('--seed', type=int, default=0, help='random seed')
-parser.add_argument('--calculate', action='store_true', default=False, help='Calculate weights for ensameble based on '
+parser.add_argument('--calculate', action='store_true', default=False, help='Calculate weights for ensemble based on '
                                                                             'training results')
+parser.add_argument('--per_class', action='store_true', default=False, help='Emsemble per class')
 args = parser.parse_args()
 
 log_format = '%(asctime)s %(message)s'
@@ -100,20 +102,24 @@ def main():
         test_data, batch_size=args.batch_size, shuffle=False, pin_memory=True, num_workers=0)
 
     if args.calculate:
-        weights = calc_ensemble(train_queue, models)
-        #weights = torch.tensor([8., 8., 8., 7., 8., 1.], device='cuda')
+        # return n_models x n_classes matrix of weights
+        if args.per_class:
+            weights = calc_ensemble(train_queue, models, len(train_data.classes))
+        else:
+            weights = calc_ensemble(train_queue, models)
     else:
         weights = torch.ones(len(models), device='cuda')
     logging.info('train final weights = %s', weights)
 
-    test_acc, top5_acc, test_obj = infer(test_queue, models, criterion, weights/weights.max())
-    logging.info('test loss %e, acc top1: %f, acc top5 %f', test_obj, test_acc, top5_acc)
+    # scale weights per maximum value per class
+    test_acc, top5_acc, test_obj = infer(test_queue, models, criterion, weights/weights.amax(dim=0))
+    logging.info('test loss %e, acc top1: %.2f, acc top5 %.2f', test_obj, test_acc, top5_acc)
 
     # train_acc, top5_acc, train_obj = infer(train_queue, models, criterion)
     # logging.info('train loss %e, acc top1: %f, acc top5 %f', train_obj, train_acc, top5_acc)
 
 
-def calc_ensemble(train_queue, models: dict) -> torch.Tensor:
+def calc_ensemble(train_queue, models: dict, n_classes:int=None) -> torch.Tensor:
     weights = []
     with torch.no_grad():
         for step, (input, target) in enumerate(train_queue):
@@ -123,15 +129,25 @@ def calc_ensemble(train_queue, models: dict) -> torch.Tensor:
             logits_list = []
             for model in models.values():
                 logits_list.append(model(input)[0])
-            weights.append(utils.score_per_model(torch.stack(logits_list, dim=1, out=None), target))
+            # return n_models x n_classes matrix of weights
+            if n_classes:
+                weights.append(utils.score_per_class(torch.stack(logits_list, dim=1, out=None), target, n_classes))
+            else:
+                weights.append(utils.score_per_model(torch.stack(logits_list, dim=1, out=None), target))
 
             if step % (len(train_queue) / args.report_lines) == 0:
-                logging.info('train %03d partial weights = %s', step, torch.vstack(weights, out=None).sum(dim=0))
+                logging.info('train %03d partial weights = %s', step, torch.stack(weights, dim=0).sum(dim=0))
 
-    return torch.vstack(weights, out=None).sum(dim=0)
+    return torch.stack(weights, dim=0).sum(dim=0)
 
 
-def infer(test_queue, models: dict, criterion, weights=None):
+def infer(test_queue, models: dict, criterion, weights):
+    # expand the weight to [1, n_models, n_classes(or 1)] dim then
+    if len(weights.size()) == 1:
+        weights = weights[None, :, None]
+    elif len(weights.size()) == 2:
+        weights = weights[None, :]
+
     objs = utils.AvgrageMeter()
     top1 = utils.AvgrageMeter()
     top5 = utils.AvgrageMeter()
@@ -150,8 +166,8 @@ def infer(test_queue, models: dict, criterion, weights=None):
                 loss = criterion(logits, target)
                 loss_list.append(loss)
             merged_logits = min_max_scaler(torch.stack(logits_list, dim=1, out=None))  # stack the probas and rescale
-            # First expand the weight to [1,n_models,1] dim then do element-wise multiplication
-            weighted_logits = merged_logits * weights[None, :, None]
+            # do element-wise multiplication
+            weighted_logits = merged_logits * weights
             mean_logits = torch.mean(weighted_logits, dim=1, out=None)
             merged_loss = torch.stack(loss_list, dim=0, out=None)
             merged_loss = torch.mean(merged_loss, dim=0, out=None)

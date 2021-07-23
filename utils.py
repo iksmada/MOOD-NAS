@@ -48,6 +48,17 @@ def score_per_model(outputs: torch.Tensor, target) -> torch.Tensor:
     return torch.vstack(scores, out=None).sum(dim=0)
 
 
+def score_per_class(outputs: torch.Tensor, target, n_classes) -> torch.Tensor:
+    pred = outputs.argmax(dim=2).t()
+    correct = pred.eq(target.view(1, -1).expand_as(pred)).t()
+    scores = [torch.zeros(outputs.size()[1], device=correct.device)] * n_classes
+    for corr, expected in zip(correct, target):
+        # if all values are true we point no one
+        if not corr.all().data.item():
+            scores[expected] = scores[expected] + corr.float()
+    return torch.stack(scores, dim=1, out=None)
+
+
 class Cutout(object):
     def __init__(self, length):
         self.length = length
