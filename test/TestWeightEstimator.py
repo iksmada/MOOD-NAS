@@ -1,3 +1,4 @@
+import logging
 from unittest import TestCase, SkipTest
 
 import numpy as np
@@ -20,6 +21,17 @@ class TestWeightEstimator(TestCase):
         result = fun(weight)
         self.instance.set_result(result, weight)
         return weight
+
+    def plot_frontier(self, title: str):
+        plt.title(title)
+        plt.scatter(list(pair[0] for pair in self.instance.results.values()),
+                    list(pair[1] for pair in self.instance.results.values()),
+                    label="Dominated Results")
+        plt.scatter(list(pair[0] for pair in self.instance.optimal_results),
+                    list(pair[1] for pair in self.instance.optimal_results),
+                    label="Optimal Results")
+        plt.legend()
+        plt.show()
 
     def test_init(self):
         np.testing.assert_array_equal(self.instance.get_next(), np.array([1, 0]))
@@ -81,29 +93,20 @@ class TestWeightEstimator(TestCase):
             max_iter = 50
             self.assertLess(len(self.instance.weight_candidates), max_iter,
                             "This should end in less than {} iterations".format(max_iter))
-        plt.scatter(list(pair[0] for pair in self.instance.optimal_results),
-                    list(pair[1] for pair in self.instance.optimal_results))
-        plt.show()
+        self.plot_frontier("test_has_next")
 
     def test_random_function(self):
-        # this test is failing now because we are ordering the frontier according to y values
-        # this was working fine when we were saving the index to where to save on optimal_results
+        np.random.seed(0)
+        logging.getLogger().setLevel(logging.DEBUG)
         while self.instance.has_next():
-            random_fun = lambda x: self.sqr_fun(x) + (np.random.random(2) - 0.5) / 30
+            random_fun = lambda x: self.sqr_fun(x) + (np.random.random(2) - 0.5) / 10
             self.consume_w_and_set(random_fun)
-            print(self.instance.weight_candidates[-1])
             # assert that this ends in less than 200 iterations
-            max_iter = 200
+            max_iter = 50
             self.assertLess(len(self.instance.weight_candidates), max_iter,
                             "This should end in less than {} iterations".format(max_iter))
-        plt.scatter(list(pair[0] for pair in self.instance.results.values()),
-                    list(pair[1] for pair in self.instance.results.values()),
-                    label="Dominated Results")
-        plt.scatter(list(pair[0] for pair in self.instance.optimal_results),
-                    list(pair[1] for pair in self.instance.optimal_results),
-                    label="Optimal Results")
-        plt.legend()
-        plt.show()
+        logging.getLogger().setLevel(logging.INFO)
+        self.plot_frontier("test_random_function")
 
     @SkipTest
     def test_real_network(self):
@@ -121,9 +124,7 @@ class TestWeightEstimator(TestCase):
             self.instance.set_result(np.array[reg_loss, criterion_loss], weight)
             self.assertLess(len(self.instance.weight_candidates), 50, "This should end in less than 50 iterations")
 
-        plt.scatter(list(pair[0] for pair in self.instance.optimal_results),
-                    list(pair[1] for pair in self.instance.optimal_results))
-        plt.show()
+        self.plot_frontier("test_real_network")
 
 
 

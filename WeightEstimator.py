@@ -1,3 +1,5 @@
+import logging
+
 import numpy as np
 
 from scipy.spatial.distance import euclidean
@@ -36,28 +38,30 @@ class WeightEstimator:
         distance = 0
         if opt1 is not None and opt2 is not None:
             weight = self.calculate_next_weight(opt1, opt2)
+            logging.debug("w = {}, opt1 = {}, opt2 = {}".format(weight, opt1, opt2))
             self.weight_candidates.append(weight)
             distance = euclidean(opt1, opt2)
         return distance
 
     def find_optimal_pair(self) -> list:
-        last_obj = None
+        last_opt = None
         max_distance = 0
         pair = [None, None]
-        for curr_obj in self.optimal_results:
-            if last_obj is None:
-                last_obj = curr_obj
+        for curr_opt in self.optimal_results:
+            if last_opt is None:
+                last_opt = curr_opt
                 continue
-            # skip pairs that was already visited and returned dominated solutions
-            if self.was_visited(last_obj, curr_obj):
-                # this makes the function to fail when working with a convex function,
-                # TODO investigate who to use it
-                pass
-            distance = euclidean(last_obj, curr_obj)
+            # skip pairs that were already visited
+            if self.was_visited(last_opt, curr_opt):
+                continue
+            distance = euclidean(last_opt, curr_opt)
             if distance > max_distance:
                 max_distance = distance
-                pair = [last_obj, curr_obj]
-            last_obj = curr_obj
+                pair = [last_opt, curr_opt]
+            last_opt = curr_opt
+
+        # mark as visited
+        self.visited_pairs.append(np.vstack(pair))
         return pair
 
     @staticmethod
@@ -67,9 +71,10 @@ class WeightEstimator:
         the two parameters opt1 and opt2 with the constraint to have an result with sum 1.
         :param opt1:    an array with the value for each dimension
         :param opt2:    a second array with the value for each dimension
-        :return:        the line parameters that connects the 2 points
+        :return:        the line parameters (ax = b) that connects the 2 points
         """
-        assert opt1.shape == opt2.shape
+        assert opt1.shape == opt2.shape, "Both arrays should have the same size, but {} and {} were given".format(
+            opt1.shape, opt2.shape)
         # for 2D case it would be:
         # w1 * (opt2[0] - opt1[0]) + w2 * (op2[1] - op1[1]) = 0
         # w1 * 1                   + w2 * 1                 = 1
@@ -124,5 +129,4 @@ class WeightEstimator:
         for pair in self.visited_pairs:
             if np.array_equal(pair, curr_pair):
                 return True
-        self.visited_pairs.append(curr_pair)
         return False
