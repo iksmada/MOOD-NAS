@@ -1,0 +1,128 @@
+import numpy as np
+
+from scipy.spatial.distance import euclidean
+
+
+class WeightEstimator:
+
+    # default constructor
+    def __init__(self, delta: float = 0.1, n_objectives: int = 2):
+        assert n_objectives >= 2
+        self.visited_pairs = []
+        # set delta
+        self.delta = delta
+        self.weight_candidates = []
+        self.optimal_results = []
+        # dict using weights as keys and function results as values. The key is converted from ndarray to tuple because
+        # ndarrays are not hashable, probably because they are mutable
+        self.results = {}
+        self.weight_index = -1
+        # init weights
+        for i in range(n_objectives):
+            w = np.zeros([n_objectives])
+            w[i] = 1
+            self.weight_candidates.append(w)
+
+    def has_next(self) -> bool:
+        # check if all candidates were visited
+        if self.weight_index == len(self.weight_candidates) - 1:
+            # check if we can calculate more or not
+            if self.calculate_next() <= self.delta:
+                return False
+        return True
+
+    def calculate_next(self) -> float:
+        opt1, opt2 = self.find_optimal_pair()
+        distance = 0
+        if opt1 is not None and opt2 is not None:
+            weight = self.calculate_next_weight(opt1, opt2)
+            self.weight_candidates.append(weight)
+            distance = euclidean(opt1, opt2)
+        return distance
+
+    def find_optimal_pair(self) -> list:
+        last_obj = None
+        max_distance = 0
+        pair = [None, None]
+        for curr_obj in self.optimal_results:
+            if last_obj is None:
+                last_obj = curr_obj
+                continue
+            # skip pairs that was already visited and returned dominated solutions
+            if self.was_visited(last_obj, curr_obj):
+                # this makes the function to fail when working with a convex function,
+                # TODO investigate who to use it
+                pass
+            distance = euclidean(last_obj, curr_obj)
+            if distance > max_distance:
+                max_distance = distance
+                pair = [last_obj, curr_obj]
+            last_obj = curr_obj
+        return pair
+
+    @staticmethod
+    def calculate_next_weight(opt1: np.ndarray, opt2: np.ndarray) -> np.ndarray:
+        """
+        This method resolve a simple linear equation. It finds the weights (line) that connects
+        the two parameters opt1 and opt2 with the constraint to have an result with sum 1.
+        :param opt1:    an array with the value for each dimension
+        :param opt2:    a second array with the value for each dimension
+        :return:        the line parameters that connects the 2 points
+        """
+        assert opt1.shape == opt2.shape
+        # for 2D case it would be:
+        # w1 * (opt2[0] - opt1[0]) + w2 * (op2[1] - op1[1]) = 0
+        # w1 * 1                   + w2 * 1                 = 1
+        multipliers = np.array([opt2 - opt1, np.ones(opt1.shape)])
+        result = np.array([0, 1])
+        # solve the linear equation
+        return np.linalg.solve(multipliers, result)
+
+    def set_result(self, result: np.ndarray, weight: np.ndarray):
+        assert len(weight) == len(result)
+        self.results[tuple(weight)] = result
+        # if it is not dominated add it to optimal_results
+        if not self.is_dominated(result):
+            # calculate the index to insert
+            reached_end = True
+            index = 0
+            for i, opt in enumerate(self.optimal_results):
+                if opt[1] < result[1]:
+                    index = i
+                    reached_end = False
+                    break
+            if reached_end:
+                self.optimal_results.append(result)
+            else:
+                # insert after where it stops to be bigger
+                self.optimal_results.insert(index, result)
+        # remove those optimal that result dominates
+        self.optimal_results = [optimal for optimal in self.optimal_results if np.any(np.less(optimal, result))
+                                or np.array_equal(optimal, result)]
+
+    def is_dominated(self, result: np.ndarray) -> bool:
+        """
+        This method check if one result is dominated by the current optimal results.
+        This method expected smaller values to be better, so a result is dominated
+        if it is bigger than some optimal results in all objectives.
+        :param result:  the array with objective results values
+        :return:        True if the result is dominated by some other optimal results,
+                        False otherwise
+        """
+        for opt_objective in self.optimal_results:
+            # if the result is greater in all objectives, then it is dominated
+            if np.all(np.greater_equal(result, opt_objective)):
+                return True
+        return False
+
+    def get_next(self) -> np.ndarray:
+        self.weight_index += 1
+        return self.weight_candidates[self.weight_index]
+
+    def was_visited(self, last_obj: np.ndarray, curr_obj: np.ndarray):
+        curr_pair = np.vstack([last_obj, curr_obj])
+        for pair in self.visited_pairs:
+            if np.array_equal(pair, curr_pair):
+                return True
+        self.visited_pairs.append(curr_pair)
+        return False
