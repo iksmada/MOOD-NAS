@@ -105,7 +105,8 @@ def main(args):
         # training
         train_acc, train_obj, l1_loss, l2_loss, criterion_loss = train(
             train_queue, valid_queue, model, architect, criterion, optimizer, lr, epoch, args.grad_clip,
-            args.report_freq, args.unrolled, l1_weight=args.l1_weight, l2_weight=args.l2_weight
+            args.report_lines, args.unrolled,
+            args.criterion_weight, args.l1_weight, args.l2_weight
         )
         scheduler.step()
         logging.info('train_acc %f', train_acc)
@@ -115,7 +116,7 @@ def main(args):
 
         # validation
         if args.epochs - epoch <= 1:
-            valid_acc, valid_obj = infer(valid_queue, model, criterion, args.report_freq)
+            valid_acc, valid_obj = infer(valid_queue, model, criterion, args.report_lines)
             logging.info('valid_acc %f', valid_acc)
 
         utils.save(model, os.path.join(args.save, 'weights.pt'))
@@ -124,7 +125,6 @@ def main(args):
 
     logging.info('last genotype = %s', genotype)
     model = TrainNetwork(36, CIFAR_CLASSES, 20, False, genotype)
-    model = model
     model_size_mb = utils.count_parameters_in_MB(model)
     logging.info("Train model param size = %.2fMB", model_size_mb)
 
@@ -150,8 +150,8 @@ def main(args):
     }
 
 
-def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr, epoch, grad_clip, report_freq, unrolled,
-          l1_weight=0, l2_weight=0):
+def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr, epoch, grad_clip, report_lines,
+          unrolled, criterion_weight=1.0, l1_weight=-1, l2_weight=-1):
     objs = utils.AvgrageMeter()
     top1 = utils.AvgrageMeter()
     top5 = utils.AvgrageMeter()
@@ -181,11 +181,11 @@ def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr, 
         optimizer.zero_grad()
         logits = model(input)
         criterion_loss = criterion(logits, target)
-        loss = criterion_loss
-        if l1_weight > 0:
+        loss = criterion_weight * criterion_loss
+        if l1_weight >= 0:
             l1_loss = param_loss(model, nn.L1Loss(reduction='sum'))
             loss += l1_weight * l1_loss
-        if l2_weight > 0:
+        if l2_weight >= 0:
             l2_loss = param_loss(model, nn.MSELoss(reduction='sum'))
             loss += l2_weight * l2_loss
 
@@ -198,7 +198,7 @@ def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr, 
         top1.update(prec1.data.item(), n)
         top5.update(prec5.data.item(), n)
 
-        if step % report_freq == 0:
+        if step % (len(train_queue) / report_lines) == 0:
             logging.info('train %03d %e %f %f', step, objs.avg, top1.avg, top5.avg)
 
     return top1.avg, objs.avg, l1_loss, l2_loss, criterion_loss
@@ -211,7 +211,7 @@ def param_loss(model, penalty):
     return reg_loss
 
 
-def infer(valid_queue, model, criterion, report_freq):
+def infer(valid_queue, model, criterion, report_lines):
     objs = utils.AvgrageMeter()
     top1 = utils.AvgrageMeter()
     top5 = utils.AvgrageMeter()
@@ -230,7 +230,7 @@ def infer(valid_queue, model, criterion, report_freq):
             top1.update(prec1.data.item(), n)
             top5.update(prec5.data.item(), n)
 
-            if step % report_freq == 0:
+            if step % (len(valid_queue) / report_lines) == 0:
                 logging.info('valid %03d %e %f %f', step, objs.avg, top1.avg, top5.avg)
 
     return top1.avg, objs.avg
@@ -245,7 +245,7 @@ def create_parser():
     parser.add_argument('--learning_rate_min', type=float, default=0.001, help='min learning rate')
     parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
     parser.add_argument('--weight_decay', type=float, default=3e-4, help='weight decay')
-    parser.add_argument('--report_freq', type=float, default=50, help='report frequency')
+    parser.add_argument('--report_lines', type=int, default=5, help='number of report lines per stage')
     parser.add_argument('--gpu', type=int, default=0, help='gpu device id')
     parser.add_argument('--epochs', type=int, default=50, help='num of training epochs')
     parser.add_argument('--init_channels', type=int, default=16, help='num of init channels')
@@ -267,10 +267,12 @@ def create_parser():
 
 if __name__ == '__main__':
     parser = create_parser()
-    parser.add_argument('-l1', '--l1_weight', type=float, default=0.0,
+    parser.add_argument('-l1', '--l1_weight', type=float, default=-1,
                         help='Regularization weight (positive value) to add to the model')
-    parser.add_argument('-l2', '--l2_weight', type=float, default=0.0,
+    parser.add_argument('-l2', '--l2_weight', type=float, default=-1,
                         help='Regularization weight (positive value) to add to the model')
+    parser.add_argument('-cw', '--criterion_weight', type=float, default=1.0,
+                        help='Criterion loss weight (positive value) to add to the model')
 
     args = parser.parse_args()
     args.save = 'logs/search-{}-{}'.format(args.save, time.strftime("%Y%m%d-%H%M%S"))
