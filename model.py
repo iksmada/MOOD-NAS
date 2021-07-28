@@ -1,15 +1,16 @@
-import torch
-import torch.nn as nn
+import logging
+
 from operations import *
-from torch.autograd import Variable
 from utils import drop_path
 
 
 class Cell(nn.Module):
 
   def __init__(self, genotype, C_prev_prev, C_prev, C, reduction, reduction_prev):
+    # Set logger with class self name
+    self.log = logging.getLogger(self.__class__.__name__)
     super(Cell, self).__init__()
-    print(C_prev_prev, C_prev, C)
+    self.log.info("%s %s %s", C_prev_prev, C_prev, C)
 
     if reduction_prev:
       self.preprocess0 = FactorizedReduce(C_prev_prev, C)

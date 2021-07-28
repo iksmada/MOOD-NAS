@@ -1,3 +1,4 @@
+import logging
 import os
 import numpy as np
 import torch
@@ -132,8 +133,8 @@ def drop_path(x, drop_prob):
 
 def create_exp_dir(path, scripts_to_save=None):
     if not os.path.exists(path):
-        os.mkdir(path)
-    print('Experiment dir : {}'.format(path))
+        os.makedirs(path, exist_ok=True)
+    logging.info('Experiment dir : {}'.format(path))
 
     if scripts_to_save is not None:
         os.mkdir(os.path.join(path, 'scripts'))
