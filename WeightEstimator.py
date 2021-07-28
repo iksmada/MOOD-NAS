@@ -8,8 +8,10 @@ from scipy.spatial.distance import euclidean
 class WeightEstimator:
 
     # default constructor
-    def __init__(self, delta: float = 0.1, n_objectives: int = 2):
+    def __init__(self, delta: float = 0.1, n_objectives: int = 2, initial_weights: tuple = None):
         assert n_objectives >= 2
+        # Set logger with class self name
+        self.log = logging.getLogger(self.__class__.__name__)
         self.visited_pairs = []
         # set delta
         self.delta = delta
@@ -20,10 +22,13 @@ class WeightEstimator:
         self.results = {}
         self.weight_index = -1
         # init weights
-        for i in range(n_objectives):
-            w = np.zeros([n_objectives])
-            w[i] = 1
-            self.weight_candidates.append(w)
+        if initial_weights is not None:
+            [self.weight_candidates.append(weight) for weight in initial_weights]
+        else:
+            for i in range(n_objectives):
+                w = np.zeros([n_objectives])
+                w[i] = 1
+                self.weight_candidates.append(w)
 
     def has_next(self) -> bool:
         # check if all candidates were visited
@@ -38,9 +43,10 @@ class WeightEstimator:
         distance = 0
         if opt1 is not None and opt2 is not None:
             weight = self.calculate_next_weight(opt1, opt2)
-            logging.debug("w = {}, opt1 = {}, opt2 = {}".format(weight, opt1, opt2))
+            self.log.info("w = %s, opt1 = %s, opt2 = %s", weight, opt1, opt2)
             self.weight_candidates.append(weight)
-            distance = euclidean(opt1, opt2)
+            distance = self.euclidean_distance(opt1, opt2)
+            self.log.info("distance = %s", distance)
         return distance
 
     def find_optimal_pair(self) -> list:
@@ -54,7 +60,7 @@ class WeightEstimator:
             # skip pairs that were already visited
             if self.was_visited(last_opt, curr_opt):
                 continue
-            distance = euclidean(last_opt, curr_opt)
+            distance = self.euclidean_distance(last_opt, curr_opt)
             if distance > max_distance:
                 max_distance = distance
                 pair = [last_opt, curr_opt]
@@ -102,6 +108,8 @@ class WeightEstimator:
                 # insert after where it stops to be bigger
                 self.optimal_results.insert(index, result)
         # remove those optimal that result dominates
+        # TODO we may not want to remove the last item, it may be a good approach to let it here,
+        # although it would generate negative values of w
         self.optimal_results = [optimal for optimal in self.optimal_results if np.any(np.less(optimal, result))
                                 or np.array_equal(optimal, result)]
 
@@ -130,3 +138,10 @@ class WeightEstimator:
             if np.array_equal(pair, curr_pair):
                 return True
         return False
+
+    def euclidean_distance(self, last_opt, curr_opt):
+        # TODO improve it for negative values and min != 0
+        # max value per objective array
+        max_w = np.max(np.array(self.optimal_results), axis=0)
+        # divide all by max_w to normalize the max value to 1
+        return euclidean(last_opt/max_w, curr_opt/max_w)
