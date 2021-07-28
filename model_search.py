@@ -110,7 +110,7 @@ class Network(nn.Module):
     self.cells = nn.ModuleList()
     reduction_prev = False
     for i in range(layers):
-      if i in [layers//3, 2*layers//3]:
+      if i in [layers//3, 2*layers//3] and layers >= 5:
         C_curr *= 2
         reduction = True
       else:

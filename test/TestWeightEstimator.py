@@ -1,20 +1,25 @@
 import logging
-from unittest import TestCase, SkipTest
+import time
+from unittest import TestCase
 
 import numpy as np
 import matplotlib.pyplot as plt
 
 import train_search
+import utils
 from train_search import create_parser, L2_LOSS, CRITERION_LOSS, REG_LOSS
 from WeightEstimator import WeightEstimator
 
 
+def linear_fun(x): return x - 1
+def sqr_fun (x): return (x - 1) ** 2
+
+
 class TestWeightEstimator(TestCase):
+    LOG_FOLDER = "logs"
 
     def setUp(self) -> None:
         self.instance = WeightEstimator()
-        self.sqr_fun = lambda x: (x - 1) ** 2
-        self.linear_fun = lambda x: (x - 1)
 
     def consume_w_and_set(self, fun=lambda x: (x - 1) ** 2):
         weight = self.instance.get_next()
@@ -22,7 +27,7 @@ class TestWeightEstimator(TestCase):
         self.instance.set_result(result, weight)
         return weight
 
-    def plot_frontier(self, title: str):
+    def plot_frontier(self, title: str, xlabel=None, ylabel=None):
         plt.title(title)
         plt.scatter(list(pair[0] for pair in self.instance.results.values()),
                     list(pair[1] for pair in self.instance.results.values()),
@@ -30,6 +35,11 @@ class TestWeightEstimator(TestCase):
         plt.scatter(list(pair[0] for pair in self.instance.optimal_results),
                     list(pair[1] for pair in self.instance.optimal_results),
                     label="Optimal Results")
+        if xlabel is not None:
+            plt.xlabel(xlabel)
+            plt.xscale('log')
+        if ylabel is not None:
+            plt.ylabel(ylabel)
         plt.legend()
         plt.show()
 
@@ -53,8 +63,8 @@ class TestWeightEstimator(TestCase):
         self.assertFalse(self.instance.is_dominated(np.array([0, 0])))
 
     def test_calculate_next_weight_linear(self):
-        self.consume_w_and_set(self.linear_fun)
-        self.consume_w_and_set(self.linear_fun)
+        self.consume_w_and_set(linear_fun)
+        self.consume_w_and_set(linear_fun)
         results = list(self.instance.optimal_results)
         opt1 = results[0]
         opt2 = results[1]
@@ -87,7 +97,7 @@ class TestWeightEstimator(TestCase):
 
     def test_has_next(self):
         while self.instance.has_next():
-            self.consume_w_and_set(self.sqr_fun)
+            self.consume_w_and_set(sqr_fun)
             print(self.instance.weight_candidates[-1])
             # assert that this ends in less than 50 iterations
             max_iter = 50
@@ -99,7 +109,7 @@ class TestWeightEstimator(TestCase):
         np.random.seed(0)
         logging.getLogger().setLevel(logging.DEBUG)
         while self.instance.has_next():
-            random_fun = lambda x: self.sqr_fun(x) + (np.random.random(2) - 0.5) / 10
+            random_fun = lambda x: sqr_fun(x) + (np.random.random(2) - 0.5) / 10
             self.consume_w_and_set(random_fun)
             # assert that this ends in less than 200 iterations
             max_iter = 50
@@ -108,23 +118,38 @@ class TestWeightEstimator(TestCase):
         logging.getLogger().setLevel(logging.INFO)
         self.plot_frontier("test_random_function")
 
-    @SkipTest
     def test_real_network(self):
+        import shutil
+        self.instance = WeightEstimator(initial_weights=(np.array([0.2, 0.8]), np.array([0.0, 1.0])))
         while self.instance.has_next():
             parser = create_parser()
             args = parser.parse_args()
             args.layers = 1
+            args.epochs = 30
+            args.data = "../data"
+            args.weight_decay = 0
             weight = self.instance.get_next()
+            print("weight =", weight)
             args.l2_weight = weight[0]
             args.criterion_weight = weight[1]
-            args.l1_weight = 0
+            args.l1_weight = -1
+            args.subsample = 0.1
+            args.report_lines = 1
+            # CHANGE THIS VALUE TO AVOID MEMORY OVERFLOW ON GPU
+            args.batch_size = 240
+            args.save = '{}/test-{}-{}'.format(self.LOG_FOLDER, args.save, time.strftime("%Y%m%d-%H%M%S"))
+            utils.create_exp_dir(args.save, scripts_to_save=None)
+            logging.getLogger().setLevel(logging.ERROR)
+            logging.getLogger(self.instance.__class__.__name__).setLevel(logging.INFO)
             stats = train_search.main(args)
-            reg_loss = stats.get(L2_LOSS).get(weight).get(REG_LOSS)
-            criterion_loss = stats.get(L2_LOSS).get(weight).get(CRITERION_LOSS)
-            self.instance.set_result(np.array[reg_loss, criterion_loss], weight)
+            print("stats = ", stats)
+            l2_stats = stats.get(L2_LOSS).get(args.l2_weight)
+            reg_loss = l2_stats.get(REG_LOSS)
+            print("reg_loss =", reg_loss)
+            criterion_loss = l2_stats.get(CRITERION_LOSS)
+            print("criterion_loss =", criterion_loss)
+            self.instance.set_result(np.array([reg_loss, criterion_loss]), weight)
+            shutil.rmtree(args.save, ignore_errors=True)
+            self.plot_frontier("test_real_network", "L2 loss", "Cross Entropy loss")
             self.assertLess(len(self.instance.weight_candidates), 50, "This should end in less than 50 iterations")
-
         self.plot_frontier("test_real_network")
-
-
-
