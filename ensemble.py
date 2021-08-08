@@ -135,7 +135,7 @@ def calc_ensemble(train_queue, models: dict, n_classes:int=None) -> torch.Tensor
             else:
                 weights.append(utils.score_per_model(torch.stack(logits_list, dim=1, out=None), target))
 
-            if step % (len(train_queue) / args.report_lines) == 0:
+            if step % (len(train_queue) // args.report_lines) == 0:
                 logging.info('train %03d partial weights = %s', step, torch.stack(weights, dim=0).sum(dim=0))
 
     return torch.stack(weights, dim=0).sum(dim=0)
@@ -177,7 +177,7 @@ def infer(test_queue, models: dict, criterion, weights):
             top1.update(prec1.data.item(), n)
             top5.update(prec5.data.item(), n)
 
-            if step % (len(test_queue) / args.report_lines) == 0:
+            if step % (len(test_queue) // args.report_lines) == 0:
                 logging.info('test %03d %e %f %f', step, objs.avg, top1.avg, top5.avg)
 
     return top1.avg, top5.avg, objs.avg

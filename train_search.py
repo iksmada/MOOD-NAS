@@ -28,12 +28,14 @@ SIZE = "model_size"
 
 
 def main(args):
+    global log
+    log = logging.getLogger("train_search")
     CIFAR_CLASSES = 10
     if args.set == 'cifar100':
         CIFAR_CLASSES = 100
 
     if not torch.cuda.is_available():
-        logging.info('no gpu device available')
+        log.info('no gpu device available')
         sys.exit(1)
 
     np.random.seed(args.seed)
@@ -42,14 +44,14 @@ def main(args):
     torch.manual_seed(args.seed)
     cudnn.enabled = True
     torch.cuda.manual_seed(args.seed)
-    logging.info('gpu device = %d' % args.gpu)
-    logging.info("args = %s", args)
+    log.info('gpu device = %d' % args.gpu)
+    log.info("args = %s", args)
 
     criterion = nn.CrossEntropyLoss()
     criterion = criterion.cuda()
     model = Network(args.init_channels, CIFAR_CLASSES, args.layers, criterion)
     model = model.cuda()
-    logging.info("param size = %fMB", utils.count_parameters_in_MB(model))
+    log.info("param size = %fMB", utils.count_parameters_in_MB(model))
 
     optimizer = torch.optim.SGD(
         model.parameters(),
@@ -96,10 +98,10 @@ def main(args):
     l2_loss = torch.zeros(1)
     criterion_loss = torch.zeros(1)
     genotype = model.genotype()
-    logging.info('initial genotype = %s', genotype)
+    log.info('initial genotype = %s', genotype)
     for epoch in range(args.epochs):
         lr = scheduler.get_last_lr()[0]
-        logging.info('epoch %d lr %e', epoch, lr)
+        log.info('epoch %d lr %e', epoch, lr)
 
         # model.drop_path_prob = args.drop_path_prob * epoch / args.epochs
         # training
@@ -109,24 +111,24 @@ def main(args):
             args.criterion_weight, args.l1_weight, args.l2_weight
         )
         scheduler.step()
-        logging.info('train_acc %f', train_acc)
-        logging.info('%s %f', L1_LOSS, l1_loss)
-        logging.info('%s %f', L2_LOSS, l2_loss)
-        logging.info('criterion_loss %f', criterion_loss)
+        log.info('train_acc %f', train_acc)
+        log.info('%s %f', L1_LOSS, l1_loss)
+        log.info('%s %f', L2_LOSS, l2_loss)
+        log.info('criterion_loss %f', criterion_loss)
 
         # validation
         if args.epochs - epoch <= 1:
             valid_acc, valid_obj = infer(valid_queue, model, criterion, args.report_lines)
-            logging.info('valid_acc %f', valid_acc)
+            log.info('valid_acc %f', valid_acc)
 
         utils.save(model, os.path.join(args.save, 'weights.pt'))
         genotype = model.genotype()
-        logging.info('genotype = %s', genotype)
+        log.info('genotype = %s', genotype)
 
-    logging.info('last genotype = %s', genotype)
+    log.info('last genotype = %s', genotype)
     model = TrainNetwork(36, CIFAR_CLASSES, 20, False, genotype)
     model_size_mb = utils.count_parameters_in_MB(model)
-    logging.info("Train model param size = %.2fMB", model_size_mb)
+    log.info("Train model param size = %.2fMB", model_size_mb)
 
     return {
         L1_LOSS: {
@@ -198,8 +200,8 @@ def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr, 
         top1.update(prec1.data.item(), n)
         top5.update(prec5.data.item(), n)
 
-        if step % (len(train_queue) / report_lines) == 0:
-            logging.info('train %03d %e %f %f', step, objs.avg, top1.avg, top5.avg)
+        if step % (len(train_queue) // report_lines) == 0:
+            log.info('train %03d %e %f %f', step, objs.avg, top1.avg, top5.avg)
 
     return top1.avg, objs.avg, l1_loss, l2_loss, criterion_loss
 
@@ -230,14 +232,14 @@ def infer(valid_queue, model, criterion, report_lines):
             top1.update(prec1.data.item(), n)
             top5.update(prec5.data.item(), n)
 
-            if step % (len(valid_queue) / report_lines) == 0:
-                logging.info('valid %03d %e %f %f', step, objs.avg, top1.avg, top5.avg)
+            if step % (len(valid_queue) // report_lines) == 0:
+                log.info('valid %03d %e %f %f', step, objs.avg, top1.avg, top5.avg)
 
     return top1.avg, objs.avg
 
 
 def create_parser():
-    parser = argparse.ArgumentParser("cifar")
+    parser = argparse.ArgumentParser("train_search")
     parser.add_argument('--data', type=str, default='data', help='location of the data corpus')
     parser.add_argument('--set', type=str, default='cifar10', help='location of the data corpus')
     parser.add_argument('--batch_size', type=int, default=256, help='batch size')
@@ -280,8 +282,8 @@ if __name__ == '__main__':
 
     log_format = '%(asctime)s %(message)s'
     logging.basicConfig(stream=sys.stdout, level=logging.INFO,
-                        format=log_format, datefmt='%m/%d %H:%M:%S')
+                        format=log_format, datefmt='%m/%d %H:%M:%S', force=True)
     fh = logging.FileHandler(os.path.join(args.save, 'log.txt'))
     fh.setFormatter(logging.Formatter(log_format))
     logging.getLogger().addHandler(fh)
-    print(main(args))
+    logging.info(main(args))
