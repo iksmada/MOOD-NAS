@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import utils
 import train_search
 from WeightEstimator import WeightEstimator
-from train_search import create_parser, L1_LOSS, L2_LOSS, CRITERION_LOSS, REG_LOSS
+from train_search import create_parser, L1_LOSS, L2_LOSS, CRITERION_LOSS, REG_LOSS, GENOTYPE
 
 
 def get_cmap(n, name='hsv'):
@@ -61,7 +61,9 @@ if __name__ == '__main__':
         REG = L1_LOSS
     else:
         raise ValueError("Argument '--objective %s' is not implemented" % args.objective)
+    log.info("Selected regularization %s", REG)
 
+    log.info("Start of multi weight search algorithm")
     weightEst = WeightEstimator(initial_weights=(np.array([0.2, 0.8]), np.array([0.0, 1.0])))
     hist = {}
     while weightEst.has_next():
@@ -78,36 +80,55 @@ if __name__ == '__main__':
         # do the training, about 2,5 hours
         stats = train_search.main(args)
 
-        log.info("stats = %s" % stats)
+        log.info("stats = %s", stats)
         for key in stats.keys():
             temp = hist.get(key, {})
             temp.update(stats[key])
             hist[key] = temp
-        log.info("hist = %s" % hist)
 
         # save the values to the weight estimator
-        reg_stats = stats.get(REG).get(weight[0])
+        reg_stats = stats.get(REG).get(tuple(weight))
         reg_loss = reg_stats.get(REG_LOSS)
         log.info("reg_loss = %f", reg_loss)
         criterion_loss = reg_stats.get(CRITERION_LOSS)
         log.info("criterion_loss = %f", criterion_loss)
         weightEst.set_result(np.array([reg_loss, criterion_loss]), weight)
         # plot
-        plot_frontier("Regularization vs Criterion loss Pareto frontier", weightEst, args.save, REG, "Cross Entropy loss")
+        plot_frontier("Regularization vs Criterion loss Pareto frontier", weightEst, args.save, REG,
+                      "Cross Entropy loss")
         torch.cuda.empty_cache()
 
+    log.info("hist = %s", hist)
+    log.info("End of multi weight search algorithm")
+    log.info("Plotting and printing optimal result")
     reg_losses = [x[REG_LOSS] for x in hist[REG].values()]
     criterion_losses = [x[CRITERION_LOSS] for x in hist[REG].values()]
+    genotypes = [x[GENOTYPE] for x in hist[REG].values()]
+
+    # remove not optimal
+    opt_reg_losses = []
+    opt_criterion_losses = []
+    opt_lambdas = []
+    for reg, criterion, gen, weight in zip(reg_losses, criterion_losses, genotypes, hist[REG].keys()):
+        candidate = np.array([reg, criterion])
+        # check if candidate is optimal
+        if np.any(np.all(candidate == weightEst.optimal_results, axis=1)):
+            opt_reg_losses.append(reg)
+            opt_criterion_losses.append(criterion)
+            opt_lambdas.append(weight[0] / weight[1])
+            log.info("Optimal weight = %s, reg loss = %f, criterion loss = %f\ngenotype = %s",
+                     weight, reg, criterion, gen)
 
     # Plot the data
-    cmap = get_cmap(len(reg_losses) + 1)
-    for i, (x, y, w) in enumerate(zip(reg_losses, criterion_losses, hist[REG].keys())):
-        plt.scatter(x, y, color=cmap(i), label="w = %.0E" % w)
+    cmap = get_cmap(len(opt_reg_losses) + 1)
+    plt.rcParams["figure.figsize"] = (12, 8)
+    for i, (x, y, l) in enumerate(zip(opt_reg_losses, opt_criterion_losses, opt_lambdas)):
+        plt.scatter(x, y, color=cmap(i), label="λ = %.0E" % l)
 
     # Add a legend
     plt.legend()
     plt.xlabel(REG.replace("_", " "))
-    plt.ylabel("Cross entropy loss")
+    plt.ylabel("Cross Entropy loss")
     plt.title("Regularization vs Criterion loss per weight of regularization ")
 
     # Show the plot

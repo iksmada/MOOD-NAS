@@ -21,10 +21,11 @@ TRAIN_ACC = "train_acc"
 VALID_ACC = "valid_acc"
 REG_LOSS = "reg_loss"
 WEIGHT = "weight"
-L1_LOSS = "l1_loss"
-L2_LOSS = "l2_loss"
+L1_LOSS = "L1_loss"
+L2_LOSS = "L2_loss"
 CRITERION_LOSS = "criterion_loss"
 SIZE = "model_size"
+GENOTYPE = "genotype"
 
 
 def main(args):
@@ -132,21 +133,24 @@ def main(args):
 
     return {
         L1_LOSS: {
-            args.l1_weight: {
+            tuple([args.l1_weight, args.criterion_weight]): {
                 TRAIN_ACC: train_acc,
                 VALID_ACC: valid_acc,
                 REG_LOSS: l1_loss.cpu().data.item(),
                 CRITERION_LOSS: criterion_loss.cpu().data.item(),
-                SIZE: model_size_mb
+                SIZE: model_size_mb,
+                GENOTYPE: genotype
+
             }
         },
         L2_LOSS: {
-            args.l2_weight: {
+            tuple([args.l2_weight, args.criterion_weight]): {
                 TRAIN_ACC: train_acc,
                 VALID_ACC: valid_acc,
                 REG_LOSS: l2_loss.cpu().data.item(),
                 CRITERION_LOSS: criterion_loss.cpu().data.item(),
-                SIZE: model_size_mb
+                SIZE: model_size_mb,
+                GENOTYPE: genotype
             }
         }
     }

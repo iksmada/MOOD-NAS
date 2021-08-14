@@ -119,6 +119,7 @@ class TestWeightEstimator(TestCase):
         self.plot_frontier("test_random_function")
 
     def test_real_network(self):
+        logging.basicConfig(level=logging.INFO, force=True)
         import shutil
         self.instance = WeightEstimator(initial_weights=(np.array([0.2, 0.8]), np.array([0.0, 1.0])))
         while self.instance.has_next():

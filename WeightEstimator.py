@@ -17,8 +17,8 @@ class WeightEstimator:
         self.delta = delta
         self.weight_candidates = []
         self.optimal_results = []
-        # dict using weights as keys and function results as values. The key is converted from ndarray to tuple because
-        # ndarrays are not hashable, probably because they are mutable
+        # dict using weights as keys and function results as values. The key is converted from nd.array to tuple because
+        # nd.arrays are not hashable, probably because they are mutable
         self.results = {}
         self.weight_index = -1
         # init weights
@@ -77,7 +77,7 @@ class WeightEstimator:
         the two parameters opt1 and opt2 with the constraint to have an result with sum 1.
         :param opt1:    an array with the value for each dimension
         :param opt2:    a second array with the value for each dimension
-        :return:        the line parameters (ax = b) that connects the 2 points
+        :return:        the solution w for the equation aw = b
         """
         assert opt1.shape == opt2.shape, "Both arrays should have the same size, but {} and {} were given".format(
             opt1.shape, opt2.shape)
@@ -105,7 +105,7 @@ class WeightEstimator:
             if reached_end:
                 self.optimal_results.append(result)
             else:
-                # insert after where it stops to be bigger
+                # insert where it stops to be bigger
                 self.optimal_results.insert(index, result)
         # remove those optimal that result dominates
         # TODO we may not want to remove the last item, it may be a good approach to let it here,
@@ -144,4 +144,4 @@ class WeightEstimator:
         # max value per objective array
         max_w = np.max(np.array(self.optimal_results), axis=0)
         # divide all by max_w to normalize the max value to 1
-        return euclidean(last_opt/max_w, curr_opt/max_w)
+        return euclidean(last_opt / max_w, curr_opt / max_w)
