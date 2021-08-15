@@ -12,7 +12,7 @@ from WeightEstimator import WeightEstimator
 
 
 def linear_fun(x): return x - 1
-def sqr_fun (x): return (x - 1) ** 2
+def sqr_fun(x): return (x - 1) ** 2
 
 
 class TestWeightEstimator(TestCase):

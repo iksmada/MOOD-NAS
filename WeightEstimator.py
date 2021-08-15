@@ -9,7 +9,7 @@ class WeightEstimator:
 
     # default constructor
     def __init__(self, delta: float = 0.1, n_objectives: int = 2, initial_weights: tuple = None):
-        assert n_objectives >= 2
+        assert n_objectives >= 2, 'The minimum number of objectives is 2, but %s was given' % n_objectives
         # Set logger with class self name
         self.log = logging.getLogger(self.__class__.__name__)
         self.visited_pairs = []
@@ -29,6 +29,7 @@ class WeightEstimator:
                 w = np.zeros([n_objectives])
                 w[i] = 1
                 self.weight_candidates.append(w)
+        self.log.info("Initialized with delta = %f, initial weights = %s", delta, self.weight_candidates)
 
     def has_next(self) -> bool:
         # check if all candidates were visited

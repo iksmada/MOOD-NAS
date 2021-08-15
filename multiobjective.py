@@ -43,6 +43,9 @@ if __name__ == '__main__':
     parser = create_parser()
     parser.add_argument('-o', '--objective', type=str, required=True, choices={"l1", "l2"},
                         help='Set the second objective to optimize')
+    parser.add_argument('-d', '--delta', type=float, required=False, default=0.15,
+                        help='Set the minimum normalized distance between points on the Pareto frontier to stop'
+                             ' populating it.')
     args = parser.parse_args()
 
     args.save = 'logs/multi-search-{}-{}'.format(args.save, time.strftime("%Y%m%d-%H%M%S"))
@@ -64,7 +67,7 @@ if __name__ == '__main__':
     log.info("Selected regularization %s", REG)
 
     log.info("Start of multi weight search algorithm")
-    weightEst = WeightEstimator(initial_weights=(np.array([0.2, 0.8]), np.array([0.0, 1.0])))
+    weightEst = WeightEstimator(delta=args.delta, initial_weights=(np.array([0.2, 0.8]), np.array([0.0, 1.0])))
     hist = {}
     while weightEst.has_next():
         weight = weightEst.get_next()
@@ -121,6 +124,7 @@ if __name__ == '__main__':
 
     # Plot the data
     cmap = get_cmap(len(opt_reg_losses) + 1)
+    plt.clf()
     plt.rcParams["figure.figsize"] = (12, 8)
     for i, (x, y, l) in enumerate(zip(opt_reg_losses, opt_criterion_losses, opt_lambdas)):
         plt.scatter(x, y, color=cmap(i), label="λ = %.0E" % l)
