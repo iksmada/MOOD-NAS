@@ -122,18 +122,22 @@ if __name__ == '__main__':
             log.info("Optimal weight = %s, reg loss = %f, criterion loss = %f\ngenotype = %s",
                      weight, reg, criterion, gen)
 
+    # order by lambda to make legend linear
+    data = zip(opt_reg_losses, opt_criterion_losses, opt_lambdas)
+    data = sorted(data, key=lambda tup: tup[2], reverse=True)
+
+    plt.clf()
     # Plot the data
     cmap = get_cmap(len(opt_reg_losses) + 1)
-    plt.clf()
-    plt.rcParams["figure.figsize"] = (12, 8)
-    for i, (x, y, l) in enumerate(zip(opt_reg_losses, opt_criterion_losses, opt_lambdas)):
+    plt.gcf().set_size_inches(10, 7, forward=True)
+    for i, (x, y, l) in enumerate(data):
         plt.scatter(x, y, color=cmap(i), label="λ = %.0E" % l)
 
     # Add a legend
     plt.legend()
     plt.xlabel(REG.replace("_", " "))
     plt.ylabel("Cross Entropy loss")
-    plt.title("Regularization vs Criterion loss per weight of regularization ")
+    plt.title("Regularization vs Criterion loss per weight of regularization")
 
     # Show the plot
     plt.savefig(os.path.join(args.save, "losses.png"))
