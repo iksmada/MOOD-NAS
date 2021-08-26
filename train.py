@@ -23,6 +23,9 @@ TOP5 = 'top5'
 TEST_TOP5 = 'test_top5'
 TEST_LOSS = 'test_loss'
 TEST_ACCURACY = 'test_accuracy'
+VALID_TOP5 = 'valid_top5'
+VALID_LOSS = 'valid_loss'
+VALID_ACCURACY = 'valid_accuracy'
 LOSS = 'loss'
 ACCURACY = 'accuracy'
 
@@ -33,7 +36,7 @@ parser.add_argument('--batch_size', type=int, default=96, help='batch size')
 parser.add_argument('--learning_rate', type=float, default=0.025, help='init learning rate')
 parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
 parser.add_argument('--weight_decay', type=float, default=3e-4, help='weight decay')
-parser.add_argument('--report_freq', type=float, default=50, help='report frequency')
+parser.add_argument('--report_lines', type=int, default=5, help='number of report lines per stage')
 parser.add_argument('--gpu', type=int, default=0, help='gpu device id')
 parser.add_argument('--epochs', type=int, default=600, help='num of training epochs')
 parser.add_argument('--init_channels', type=int, default=36, help='num of init channels')
@@ -48,6 +51,7 @@ parser.add_argument('--save', type=str, help='experiment name')
 parser.add_argument('--seed', type=int, default=0, help='random seed')
 parser.add_argument('--arch', type=str, default='PC_DARTS_cifar', help='which architecture to use')
 parser.add_argument('--grad_clip', type=float, default=5, help='gradient clipping')
+parser.add_argument('--train_portion', type=float, default=0.9, help='portion of training data')
 args = parser.parse_args()
 
 if args.save is None:
@@ -57,7 +61,7 @@ utils.create_exp_dir(args.save, scripts_to_save=None)
 
 log_format = '%(asctime)s %(message)s'
 logging.basicConfig(stream=sys.stdout, level=logging.INFO,
-                    format=log_format, datefmt='%m/%d %H:%M:%S')
+                    format=log_format, datefmt='%m/%d %H:%M:%S', force=True)
 fh = logging.FileHandler(os.path.join(args.save, 'log.txt'))
 fh.setFormatter(logging.Formatter(log_format))
 logging.getLogger().addHandler(fh)
@@ -72,6 +76,8 @@ def main():
     if not torch.cuda.is_available():
         logging.info('no gpu device available')
         sys.exit(1)
+    global log
+    log = logging.getLogger("train")
 
     np.random.seed(args.seed)
     torch.cuda.set_device(args.gpu)
@@ -79,8 +85,8 @@ def main():
     torch.manual_seed(args.seed)
     cudnn.enabled = True
     torch.cuda.manual_seed(args.seed)
-    logging.info('gpu device = %d' % args.gpu)
-    logging.info("args = %s", args)
+    log.info('gpu device = %d' % args.gpu)
+    log.info("args = %s", args)
 
     genotype = genotypes.__dict__[args.arch]
     model = Network(args.init_channels, CIFAR_CLASSES, args.layers, args.auxiliary, genotype)
@@ -88,7 +94,7 @@ def main():
     if args.model_path is not None:
         utils.load(model, args.model_path)
 
-    logging.info("param size = %.2fMB", utils.count_parameters_in_MB(model))
+    log.info("param size = %.2fMB", utils.count_parameters_in_MB(model))
 
     criterion = nn.CrossEntropyLoss()
     criterion = criterion.cuda()
@@ -102,15 +108,28 @@ def main():
     train_transform, test_transform = utils._data_transforms_cifar10(args)
     if args.set == 'cifar100':
         train_data = dset.CIFAR100(root=args.data, train=True, download=True, transform=train_transform)
+        valid_data = dset.CIFAR100(root=args.data, train=True, download=True, transform=test_transform)
         test_data = dset.CIFAR100(root=args.data, train=False, download=True, transform=test_transform)
     else:
         train_data = dset.CIFAR10(root=args.data, train=True, download=True, transform=train_transform)
+        valid_data = dset.CIFAR10(root=args.data, train=True, download=True, transform=test_transform)
         test_data = dset.CIFAR10(root=args.data, train=False, download=True, transform=test_transform)
     # train_data = dset.CIFAR10(root=args.data, train=True, download=True, transform=train_transform)
     # test_data = dset.CIFAR10(root=args.data, train=False, download=True, transform=test_transform)
 
+    num_train = len(train_data)
+    indices = list(range(num_train))
+    split = int(np.floor(args.train_portion * num_train))
+
     train_queue = DataLoader(
-        train_data, batch_size=args.batch_size, shuffle=True, pin_memory=True, num_workers=2)
+        train_data, batch_size=args.batch_size,
+        sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
+        pin_memory=True, num_workers=4)
+
+    valid_queue = torch.utils.data.DataLoader(
+        valid_data, batch_size=args.batch_size,
+        sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]),
+        pin_memory=True, num_workers=4)
 
     test_queue = DataLoader(
         test_data, batch_size=args.batch_size, shuffle=False, pin_memory=True, num_workers=2)
@@ -119,30 +138,38 @@ def main():
 
     history = defaultdict(list)
     for epoch in range(args.epochs):
-        logging.info('epoch %d lr %e', epoch, scheduler.get_last_lr()[0])
+        log.info('epoch %d lr %e', epoch, scheduler.get_last_lr()[0])
         model.drop_path_prob = args.drop_path_prob * epoch / args.epochs
 
         train_acc, top5, train_obj = train(train_queue, model, criterion, optimizer)
-        logging.info('train_acc %f', train_acc)
-        logging.info('train_loss %f', train_obj)
+        log.info('train_acc %f', train_acc)
+        log.info('train_loss %f', train_obj)
         history[ACCURACY].append(train_acc)
         history[TOP5].append(top5)
         history[LOSS].append(train_obj)
         scheduler.step()
 
-        test_acc, test_top5, test_obj = infer(test_queue, model, criterion)
-        logging.info('test_acc %f', test_acc)
-        logging.info('test_loss %f', test_obj)
-        history[TEST_ACCURACY].append(test_acc)
-        history[TEST_TOP5].append(test_top5)
-        history[TEST_LOSS].append(test_obj)
+        log.info("Validation")
+        valid_acc, valid_top5, valid_obj = infer(valid_queue, model, criterion)
+        log.info('%s %f', VALID_ACCURACY, valid_acc)
+        log.info('%s %f', VALID_LOSS, valid_obj)
+        history[VALID_ACCURACY].append(valid_acc)
+        history[VALID_TOP5].append(valid_top5)
+        history[VALID_LOSS].append(valid_obj)
 
         utils.save(model, os.path.join(args.save, 'weights.pt'))
 
+    log.info("Test")
+    test_acc, test_top5, test_obj = infer(test_queue, model, criterion)
+    log.info('%s %f', TEST_ACCURACY, test_acc)
+    log.info('%s %f', TEST_TOP5, test_top5)
+    log.info('%s %f', TEST_LOSS, test_obj)
+
+    plt.gcf().set_size_inches(10, 7, forward=True)
     # Show the loss plot
     plt.plot(history[LOSS], label="Train loss")
-    plt.plot(history[TEST_LOSS], label="Test loss")
-    plt.title("Train and Test loss per epoch")
+    plt.plot(history[VALID_LOSS], label="Valid loss")
+    plt.title("Train and Valid loss per epoch")
     plt.legend()
     plt.xlabel('epoch', fontsize=12)
     plt.yscale('log')
@@ -153,8 +180,8 @@ def main():
 
     # Show the acc plot
     plt.plot(history[ACCURACY], label="Train accuracy")
-    plt.plot(history[TEST_ACCURACY], label="Test accuracy")
-    plt.title("Train and Test accuracy per epoch")
+    plt.plot(history[VALID_ACCURACY], label="Valid accuracy")
+    plt.title("Train and Valid accuracy per epoch")
     plt.legend()
     plt.xlabel('epoch', fontsize=12)
     plt.xscale('log')
@@ -165,8 +192,8 @@ def main():
 
     # Show the top5 acc plot
     plt.plot(history[TOP5], label="Train top5 acc")
-    plt.plot(history[TEST_TOP5], label="Test top5 acc")
-    plt.title("Train and Test top5 accuracy per epoch")
+    plt.plot(history[VALID_TOP5], label="Valid top5 acc")
+    plt.title("Train and Valid top5 accuracy per epoch")
     plt.legend()
     plt.xlabel('epoch', fontsize=12)
     plt.xscale('log')
@@ -202,20 +229,20 @@ def train(train_queue, model, criterion, optimizer):
         top1.update(prec1.data.item(), n)
         top5.update(prec5.data.item(), n)
 
-        if step % args.report_freq == 0:
-            logging.info('train %03d %e %f %f', step, objs.avg, top1.avg, top5.avg)
+        if step % (len(train_queue) // args.report_lines) == 0:
+            log.info('train %03d %e %f %f', step, objs.avg, top1.avg, top5.avg)
 
     return top1.avg, top5.avg, objs.avg
 
 
-def infer(test_queue, model, criterion):
+def infer(queue, model, criterion):
     objs = utils.AvgrageMeter()
     top1 = utils.AvgrageMeter()
     top5 = utils.AvgrageMeter()
     model.eval()
 
     with torch.no_grad():
-        for step, (input, target) in enumerate(test_queue):
+        for step, (input, target) in enumerate(queue):
             input = input.cuda()
             target = target.cuda(non_blocking=True)
             logits, _ = model(input)
@@ -227,8 +254,9 @@ def infer(test_queue, model, criterion):
             top1.update(prec1.data.item(), n)
             top5.update(prec5.data.item(), n)
 
-            if step % args.report_freq == 0:
-                logging.info('test %03d %e %f %f', step, objs.avg, top1.avg, top5.avg)
+            # 3 fixed lines of report for inference
+            if step % (len(queue) // 3) == 0:
+                log.info('infer %03d %e %f %f', step, objs.avg, top1.avg, top5.avg)
 
     return top1.avg, top5.avg, objs.avg
 
