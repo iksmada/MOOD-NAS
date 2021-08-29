@@ -252,7 +252,7 @@ def create_parser():
     parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
     parser.add_argument('--weight_decay', type=float, default=3e-4, help='weight decay')
     parser.add_argument('--report_lines', type=int, default=5, help='number of report lines per stage')
-    parser.add_argument('--gpu', type=int, default=0, help='gpu device id')
+    parser.add_argument('--gpu', type=int, default=0, help='gpu device index')
     parser.add_argument('--epochs', type=int, default=50, help='num of training epochs')
     parser.add_argument('--init_channels', type=int, default=16, help='num of init channels')
     parser.add_argument('--layers', type=int, default=8, help='total number of layers')
