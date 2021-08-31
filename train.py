@@ -62,9 +62,8 @@ def create_parser():
 def main(args_temp):
     global args
     args = args_temp
-    if args.save is None:
-        args.save = args.arch
-    log_path = 'logs/eval-{}-{}'.format(args.save, time.strftime("%Y%m%d-%H%M%S"))
+
+    log_path = 'logs/eval-{}-{}'.format(args.arch if args.save is None else args.save, time.strftime("%Y%m%d-%H%M%S"))
     utils.create_exp_dir(log_path, scripts_to_save=None)
 
     log_format = '%(asctime)s %(message)s'
