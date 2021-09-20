@@ -119,8 +119,10 @@ if __name__ == '__main__':
             opt_reg_losses.append(reg)
             opt_criterion_losses.append(criterion)
             opt_lambdas.append(weight[0] / weight[1])
-            log.info("Optimal weight = %s, reg loss = %f, criterion loss = %f\ngenotype = %s",
-                     weight, reg, criterion, gen)
+            # eg: l2_loss_1e3
+            gen_name = ("%s_%.0E" % (REG, weight[0])).replace("-", "").lower()
+            log.info("Optimal weight = %s, reg loss = %f, criterion loss = %f\n%s = %s",
+                     weight, reg, criterion, gen_name, gen)
 
     # order by lambda to make legend linear
     data = zip(opt_reg_losses, opt_criterion_losses, opt_lambdas)
