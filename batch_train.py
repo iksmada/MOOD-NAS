@@ -30,7 +30,8 @@ def calculate_batch_size(batch_model, memory, genotype: Genotype, init_channels:
 if __name__ == '__main__':
     log = logging.getLogger("batch_train")
     parser = create_parser()
-    parser.add_argument('--archs', type=str, required=True, nargs='+', help='list of architectures to use')
+    parser.add_argument('--archs', type=str, required=False, nargs='+', help='list of architectures to use',
+                        default=[arch for arch, gen in genotypes.__dict__.items() if isinstance(gen, Genotype)])
     parser.add_argument('--batch_model', type=str, default="batch_predict.pkl", help='list of architectures to use')
     args = parser.parse_args()
 
@@ -57,17 +58,18 @@ if __name__ == '__main__':
     # 1 byte = 2^⁻20 MB
     gpu_memory = math.floor(info.free * math.pow(2, -20))
 
-    trained_gen = list()
+    trained_gen = {}
     archs = args.archs
     # delete this attribute because it is not necessary to pass it to the child processes
     delattr(args, 'archs')
     for arch in archs:
         genotype = genotypes.__dict__[arch]
         log.info('%s gen = %s', arch, genotype)
-        if genotype in trained_gen:
-            log.info("Skipping arch %s because its genotype was already trained", arch)
+        if genotype in trained_gen.values():
+            same_arch = list(trained_gen.keys())[list(trained_gen.values()).index(genotype)]
+            log.info("Skipping arch %s because its genotype was already trained by %s", arch, same_arch)
         else:
-            trained_gen.append(genotype)
+            trained_gen[arch] = genotype
             batch_size = calculate_batch_size(batch_model, gpu_memory, genotype, args.init_channels, CIFAR_CLASSES,
                                               args.layers, args.auxiliary)
             args.arch = arch
