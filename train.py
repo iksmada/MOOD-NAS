@@ -24,10 +24,10 @@ from model import NetworkCIFAR as Network
 TOP5 = 'top5'
 TEST_TOP5 = 'test_top5'
 TEST_LOSS = 'test_loss'
-TEST_ACCURACY = 'test_accuracy'
+TEST_ACCURACY = 'test_acc'
 VALID_TOP5 = 'valid_top5'
 VALID_LOSS = 'valid_loss'
-VALID_ACCURACY = 'valid_accuracy'
+VALID_ACCURACY = 'valid_acc'
 LOSS = 'loss'
 ACCURACY = 'accuracy'
 
@@ -59,7 +59,7 @@ def create_parser():
     return parser
 
 
-def main(args_temp):
+def main(args_temp, force_log=False):
     global args
     args = args_temp
 
@@ -68,7 +68,7 @@ def main(args_temp):
 
     log_format = '%(asctime)s %(message)s'
     logging.basicConfig(stream=sys.stdout, level=logging.INFO,
-                        format=log_format, datefmt='%m/%d %H:%M:%S')
+                        format=log_format, datefmt='%m/%d %H:%M:%S', force=force_log)
     fh = logging.FileHandler(os.path.join(log_path, 'log.txt'))
     fh.setFormatter(logging.Formatter(log_format))
     logging.getLogger().addHandler(fh)
@@ -279,5 +279,5 @@ if __name__ == '__main__':
     parser = create_parser()
     args = parser.parse_args()
     nvidia_smi.nvmlInit()
-    main(args)
+    main(args, True)
     nvidia_smi.nvmlShutdown()
