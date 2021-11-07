@@ -13,7 +13,7 @@ import genotypes
 from genotypes import Genotype
 from model import NetworkCIFAR
 from multiobjective import get_cmap
-from train_search import L1_LOSS, L2_LOSS, TRAIN_ACC, VALID_ACC, CRITERION_LOSS
+from train_search import L1_LOSS, L2_LOSS, TRAIN_ACC, VALID_ACC, CRITERION_LOSS, REG_LOSS
 
 WEIGHT = "weight"
 
@@ -23,11 +23,26 @@ TRAIN_LOSS = "train_loss"
 VALID_LOSS = "valid_loss"
 TEST_LOSS = "test_loss"
 TEST_ACC = "test_acc"
-SEARCH_LOSS = "search_loss"
-SEARCH_ACC = "search_acc"
+SEARCH_CRIT_LOSS = "Search criterion loss"
+SEARCH_REG_LOSS = "Search regularization loss"
+SEARCH_ACC = "Search accuracy"
+FLOPS = "FLOPs"
 
 
-def plot_columns(df: DataFrame, x_column, y_column, filename="plot_table.png", negate=None):
+def plot_columns(df: DataFrame, x_column: str, y_column: str, filename="plot_table.png", negate: int = None,
+                 x_scale='log', y_scale='log'):
+    """
+    Plot DataFrame columns
+
+    :param df:
+    :param x_column: Column name to set as x axis
+    :param y_column: Column name to set as y axis
+    :param filename: Save path
+    :param negate: Negate the values and add it to some offset passed as int here
+    :param x_scale: {"linear", "log", "symlog", "logit", ...} or `.ScaleBase`
+    :param y_scale: {"linear", "log", "symlog", "logit", ...} or `.ScaleBase`
+    """
+    plt.clf()
     x_axis = df.loc[:, x_column]
     y_axis = df.loc[:, y_column]
     weights = df.loc[:, WEIGHT]
@@ -47,8 +62,8 @@ def plot_columns(df: DataFrame, x_column, y_column, filename="plot_table.png", n
     plt.legend()
     plt.xlabel(x_column)
     plt.ylabel(y_column)
-    plt.xscale('log')
-    plt.yscale('log')
+    plt.xscale(x_scale)
+    plt.yscale(y_scale)
     plt.title(f"{x_column} vs {y_column} per weight")
 
     # Show the plot
@@ -56,15 +71,33 @@ def plot_columns(df: DataFrame, x_column, y_column, filename="plot_table.png", n
     plt.show()
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser("train_search")
-    parser.add_argument("-t", "--train", type=argparse.FileType('r'), nargs='+', required=True,
-                        help="Train/Evaluation stage logs")
-    parser.add_argument("-s", "--search", type=argparse.FileType('r'), nargs='+', required=True,
-                        help="Search stage logs")
-    parser.add_argument("-o", "--output", type=str, required=False, help="Output file name", default="loss_table.csv")
-    args = parser.parse_args()
+def plot_correlation(df: DataFrame, filename="correlation_matrix.png"):
+    plt.clf()
+    f = plt.figure(figsize=(19, 17))
+    data = np.abs(df.corr(method="spearman").to_numpy())
+    plt.matshow(data, fignum=f.number)
 
+    #legend
+    plt.xticks(range(df.select_dtypes(['number']).shape[1]), df.select_dtypes(['number']).columns, fontsize=14,
+               rotation=45, ha="left", rotation_mode="anchor")
+    plt.yticks(range(df.select_dtypes(['number']).shape[1]), df.select_dtypes(['number']).columns, fontsize=14)
+
+    #colorbar
+    cb = plt.colorbar()
+    cb.ax.tick_params(labelsize=14)
+    plt.clim(min(0.5, np.min(data)))
+
+    #cell values
+    for (x, y), value in np.ndenumerate(data):
+        plt.text(x, y, f"{value:.2f}", va="center", ha="center")
+
+    plt.title('Absolute Spearman Rank Correlation Matrix', fontsize=16)
+    # Show the plot
+    plt.savefig(filename, bbox_inches='tight', dpi=100)
+    plt.show()
+
+
+def process_logs(args) -> DataFrame:
     data = []
     for log in args.train:
         row = []
@@ -75,7 +108,7 @@ if __name__ == '__main__':
             name = match.group("name")
             row.append(name)
             # l2_loss_2e01 -> 2e-01
-            weight_value = float(name.split("_")[-1].replace("e", "e-"))
+            weight_value = float(name.split("_")[2].replace("e", "e-"))
             row.append(weight_value)
             match = re.search(r"param size.*?(?P<value>\d*\.\d+)MB", lines)
             param_size = float(match.group("value"))
@@ -109,8 +142,10 @@ if __name__ == '__main__':
                     else:
                         raise Exception("L1 and L2 loss have w = -1")
                     values = list(stats.get(LOSS).values())[0]
-                    search_loss = values[CRITERION_LOSS]
-                    row.append(search_loss)
+                    search_criterion_loss = values[CRITERION_LOSS]
+                    search_reg_loss = values[REG_LOSS]
+                    row.append(search_criterion_loss)
+                    row.append(search_reg_loss)
                     search_acc = values[VALID_ACC]
                     row.append(search_acc)
                     break
@@ -118,7 +153,7 @@ if __name__ == '__main__':
                 raise Exception(f"Didn't find {name} on eval logs")
         except Exception as e:
             print(f"Error '{e}' while processing file {log.name}")
-            while len(row) < 11:
+            while len(row) < 12:
                 row.append(None)
 
         try:
@@ -154,24 +189,47 @@ if __name__ == '__main__':
 
         if len(row) > 0:
             data.append(row)
-
     df = pd.DataFrame(data, columns=[MODEL_NAME, WEIGHT, "Size",
                                      TRAIN_LOSS, TRAIN_ACC,
                                      VALID_LOSS, VALID_ACC,
                                      TEST_LOSS, TEST_ACC,
-                                     SEARCH_LOSS, SEARCH_ACC,
-                                     "Parameters", "FLOPs",
+                                     SEARCH_CRIT_LOSS, SEARCH_REG_LOSS, SEARCH_ACC,
+                                     "Parameters", FLOPS,
                                      "Latency GPU", "Latency CPU"])
     df.set_index(keys=MODEL_NAME, inplace=True)
     df.sort_values(by=WEIGHT, inplace=True, ascending=False)
     pd.set_option("display.max_rows", None, "display.max_columns", None, "display.width", None)
     print(df)
-    print(df.loc[:, np.invert(df.columns.isin([TRAIN_LOSS, TRAIN_ACC, VALID_LOSS, VALID_ACC]))])
-    output = args.output
-    df.to_csv(output)
-    filename, file_extension = os.path.splitext(output)
-    plot_columns(df, SEARCH_LOSS, VALID_LOSS, f"{filename}_search_vs_valid_loss.png")
+    df.to_csv(args.output)
+    return df
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser("train_search")
+    input_group = parser.add_mutually_exclusive_group(required=True)
+    input_group.add_argument("-t", "--train", type=argparse.FileType('r'), nargs='+',
+                             help="Train/Evaluation stage logs")
+    parser.add_argument("-s", "--search", type=argparse.FileType('r'), nargs='+', required=False,
+                        help="Search stage logs")
+    input_group.add_argument("-d", "--data", type=argparse.FileType('r'), help="Csv table generated from this code")
+    parser.add_argument("-o", "--output", type=str, required=False, help="Output file name", default="loss_table.csv")
+    args = parser.parse_args()
+
+    if args.data is None:
+        df = process_logs(args)
+    else:
+        df = pd.read_csv(args.data)
+
+    pd.set_option("display.max_rows", None, "display.max_columns", None, "display.width", None)
+    clean_df = df.loc[:, np.invert(df.columns.isin([TRAIN_LOSS, TRAIN_ACC, VALID_LOSS, VALID_ACC]))]
+    print(clean_df)
+    filename, file_extension = os.path.splitext(args.output)
+    plot_columns(df, SEARCH_CRIT_LOSS, VALID_LOSS, f"{filename}_search_vs_valid_loss.png")
     plot_columns(df, SEARCH_ACC, VALID_ACC, f"{filename}_search_vs_valid_acc.png", 100)
+    plot_columns(df, WEIGHT, VALID_ACC, f"{filename}_weight_vs_valid_acc.png", y_scale='linear')
+
+    clean_df = df.loc[:, np.invert(df.columns.isin([TRAIN_LOSS, TRAIN_ACC, FLOPS]))]
+    plot_correlation(clean_df, f"{filename}_correlation_matrix.png")
 
 
 
