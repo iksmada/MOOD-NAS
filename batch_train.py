@@ -73,6 +73,17 @@ if __name__ == '__main__':
             batch_size = calculate_batch_size(batch_model, gpu_memory, genotype, args.init_channels, CIFAR_CLASSES,
                                               args.layers, args.auxiliary)
             args.arch = arch
-            args.batch_size = batch_size
-            train.main(args)
+            trained = False
+            while not trained:
+                try:
+                    args.batch_size = batch_size
+                    train.main(args)
+                    trained = True
+                except RuntimeError as e:
+                    if "out of memory" in str(e):
+                        log.error(e)
+                        batch_size -= 5
+                        log.info(f"Re trying to train with smaller batch size of {batch_size}")
+                    else:
+                        raise e
     nvidia_smi.nvmlShutdown()
