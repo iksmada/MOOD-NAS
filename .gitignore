@@ -8,3 +8,5 @@ log.txt
 .idea/
 *.pdf
 *.pyc
+*.csv
+*.txt

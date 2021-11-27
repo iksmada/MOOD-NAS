@@ -80,7 +80,7 @@ if __name__ == '__main__':
                     train.main(args)
                     trained = True
                 except RuntimeError as e:
-                    if "out of memory" in str(e):
+                    if "out of memory" in str(e) and batch_size > 5:
                         log.error(e)
                         batch_size -= 5
                         log.info(f"Re trying to train with smaller batch size of {batch_size}")
