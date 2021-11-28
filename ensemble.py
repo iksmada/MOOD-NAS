@@ -17,34 +17,10 @@ import torch.backends.cudnn as cudnn
 from torch.autograd import Variable
 from model import NetworkCIFAR as Network
 
-parser = argparse.ArgumentParser("cifar")
-parser.add_argument('--data', type=str, default='data', help='location of the data corpus')
-parser.add_argument('--set', type=str, default='cifar10', help='location of the data corpus')
-parser.add_argument('--batch_size', type=int, default=96, help='batch size')
-#parser.add_argument('--report_freq', type=float, default=10, help='report frequency in % [0 - 100]')
-parser.add_argument('--report_lines', type=int, default=5, help='number of report lines per stage')
-parser.add_argument('--gpu', type=int, default=0, help='gpu device id')
-parser.add_argument('--init_channels', type=int, default=36, help='num of init channels')
-parser.add_argument('--layers', type=int, default=20, help='total number of layers')
-parser.add_argument('--models_folder', type=str, required=True, help='parent path of pretrained models')
-parser.add_argument('--auxiliary', action='store_true', default=False, help='use auxiliary tower')
-parser.add_argument('--cutout', action='store_true', default=False, help='use cutout')
-parser.add_argument('--cutout_length', type=int, default=16, help='cutout length')
-parser.add_argument('--drop_path_prob', type=float, default=0.2, help='drop path probability')
-parser.add_argument('--seed', type=int, default=0, help='random seed')
-parser.add_argument('--calculate', action='store_true', default=False, help='Calculate weights for ensemble based on '
-                                                                            'training results')
-parser.add_argument('--per_class', action='store_true', default=False, help='Emsemble per class')
-args = parser.parse_args()
-
-log_format = '%(asctime)s %(message)s'
-logging.basicConfig(stream=sys.stdout, level=logging.INFO,
-                    format=log_format, datefmt='%m/%d %I:%M:%S %p')
-
 CIFAR_CLASSES = 10
 
 
-def main():
+def main(args):
     if not torch.cuda.is_available():
         logging.info('no gpu device available')
         sys.exit(1)
@@ -90,36 +66,49 @@ def main():
     train_transform, test_transform = utils._data_transforms_cifar10(args)
     if args.set == 'cifar100':
         train_data = dset.CIFAR100(root=args.data, train=True, download=True, transform=train_transform)
+        valid_data = dset.CIFAR100(root=args.data, train=True, download=True, transform=test_transform)
         test_data = dset.CIFAR100(root=args.data, train=False, download=True, transform=test_transform)
     else:
         train_data = dset.CIFAR10(root=args.data, train=True, download=True, transform=train_transform)
+        valid_data = dset.CIFAR10(root=args.data, train=True, download=True, transform=test_transform)
         test_data = dset.CIFAR10(root=args.data, train=False, download=True, transform=test_transform)
 
-    train_queue = DataLoader(
-        train_data, batch_size=args.batch_size, shuffle=True, pin_memory=True, num_workers=0)
+    num_train = len(train_data)
+    indices = list(range(num_train))
+    split = int(np.floor(args.train_portion * num_train))
+
+    # train_queue = DataLoader(
+    #     train_data, batch_size=args.batch_size,
+    #     sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
+    #     pin_memory=True, num_workers=4)
+
+    valid_queue = torch.utils.data.DataLoader(
+        valid_data, batch_size=args.batch_size,
+        sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]),
+        pin_memory=True, num_workers=4)
 
     test_queue = DataLoader(
-        test_data, batch_size=args.batch_size, shuffle=False, pin_memory=True, num_workers=0)
+        test_data, batch_size=args.batch_size, shuffle=False, pin_memory=True, num_workers=4)
 
     if args.calculate:
         # return n_models x n_classes matrix of weights
         if args.per_class:
-            weights = calc_ensemble(train_queue, models, len(train_data.classes))
+            weights = calc_ensemble(valid_queue, models, len(valid_data.classes))
         else:
-            weights = calc_ensemble(train_queue, models)
+            weights = calc_ensemble(valid_queue, models)
     else:
         weights = torch.ones(len(models), device='cuda')
     logging.info('train final weights = %s', weights)
 
     # scale weights per maximum value per class
-    test_acc, top5_acc, test_obj = infer(test_queue, models, criterion, weights/weights.amax(dim=0))
+    test_acc, top5_acc, test_obj = infer(test_queue, models, criterion, weights / weights.amax(dim=0))
     logging.info('test loss %e, acc top1: %.2f, acc top5 %.2f', test_obj, test_acc, top5_acc)
 
     # train_acc, top5_acc, train_obj = infer(train_queue, models, criterion)
     # logging.info('train loss %e, acc top1: %f, acc top5 %f', train_obj, train_acc, top5_acc)
 
 
-def calc_ensemble(train_queue, models: dict, n_classes:int=None) -> torch.Tensor:
+def calc_ensemble(train_queue, models: dict, n_classes: int = None) -> torch.Tensor:
     weights = []
     with torch.no_grad():
         for step, (input, target) in enumerate(train_queue):
@@ -187,8 +176,33 @@ def min_max_scaler(input):
     min = torch.amin(input, dim=2, keepdim=True, out=None)  # mix max scaler
     input = torch.add(input, torch.negative(min), out=None)  # add min
     max = torch.amax(input, dim=2, keepdim=True, out=None)  # calculate max
-    return torch.div(input, max, out=None) # devide by max
+    return torch.div(input, max, out=None)  # devide by max
 
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser("ensemble")
+    parser.add_argument('--data', type=str, default='data', help='location of the data corpus')
+    parser.add_argument('--set', type=str, default='cifar10', help='location of the data corpus')
+    parser.add_argument('--batch_size', type=int, default=96, help='batch size')
+    parser.add_argument('--report_lines', type=int, default=5, help='number of report lines per stage')
+    parser.add_argument('--gpu', type=int, default=0, help='gpu device id')
+    parser.add_argument('--init_channels', type=int, default=36, help='num of init channels')
+    parser.add_argument('--layers', type=int, default=20, help='total number of layers')
+    parser.add_argument('--auxiliary', action='store_true', default=False, help='use auxiliary tower')
+    parser.add_argument('--cutout', action='store_true', default=False, help='use cutout')
+    parser.add_argument('--cutout_length', type=int, default=16, help='cutout length')
+    parser.add_argument('--drop_path_prob', type=float, default=0.2, help='drop path probability')
+    parser.add_argument('--seed', type=int, default=0, help='random seed')
+
+    # specific args
+    parser.add_argument('--train_portion', type=float, default=0.9, help='portion of training data')
+    parser.add_argument('--models_folder', type=str, required=True, help='parent path of pretrained models')
+    parser.add_argument('--calculate', action='store_true', default=False,
+                        help='Calculate weights for ensemble based on training results')
+    parser.add_argument('--per_class', action='store_true', default=False, help='Emsemble per class')
+    args = parser.parse_args()
+
+    log_format = '%(asctime)s %(message)s'
+    logging.basicConfig(stream=sys.stdout, level=logging.INFO,
+                        format=log_format, datefmt='%m/%d %H:%M:%S')
+    main(args)

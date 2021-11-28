@@ -118,8 +118,6 @@ def main(args_temp, force_log=False):
         train_data = dset.CIFAR10(root=args.data, train=True, download=True, transform=train_transform)
         valid_data = dset.CIFAR10(root=args.data, train=True, download=True, transform=test_transform)
         test_data = dset.CIFAR10(root=args.data, train=False, download=True, transform=test_transform)
-    # train_data = dset.CIFAR10(root=args.data, train=True, download=True, transform=train_transform)
-    # test_data = dset.CIFAR10(root=args.data, train=False, download=True, transform=test_transform)
 
     num_train = len(train_data)
     indices = list(range(num_train))
