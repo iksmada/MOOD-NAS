@@ -28,6 +28,7 @@ def filter_hist(hist: dict) -> None:
     for key, value in all_candidates.items():
         if len(optimals) == 0:
             optimals[key] = value
+            continue
         is_dominated = False
         for opt_objective in optimals.values():
             # if the result is greater in all objectives, then it is dominated
@@ -55,6 +56,7 @@ if __name__ == '__main__':
     parser.add_argument("-l", "--log", type=argparse.FileType('r'), help="Multi search stage log", required=True)
     parser.add_argument("-o", "--output", type=str, required=False, help="Output image name", default="plot.png")
     parser.add_argument("-i", "--inches", type=float, help="Image size in inches", nargs='+', default=[6.4, 4.8])
+    parser.add_argument('-d', '--dominated', action='store_true', default=False, help='Show dominated points')
     args = parser.parse_args()
 
     # filter logs
@@ -70,27 +72,38 @@ if __name__ == '__main__':
     else:
         raise RuntimeError("Cant decode line Selected regularization")
 
-    match = re.search(r"hist = (?P<hist>.*?)\\n", lines)
-    hist = match.group("hist")
+    match = re.finditer(r"hist = (?P<hist>.*?)\\n", lines)
+    hist_str = list(match)[-1].group("hist")
 
-    hist = eval(hist)[loss]
-    pprint(hist)
-    filter_hist(hist)
     filename = args.output
     y_label = "Cross Entropy loss"
-    title = "Regularization vs Criterion loss per weight of regularization"
+
+    orig_hist = eval(hist_str)[loss]
+    pprint(orig_hist)
+    hist = eval(hist_str)[loss]
+    filter_hist(hist)  # inplace filter
+
     x_axis = [entry[REG_LOSS] for entry in hist.values()]
     y_axis = [entry[CRITERION_LOSS] for entry in hist.values()]
-    weights = [weight[0] for weight in hist.keys()]
 
-    data = zip(x_axis, y_axis, weights)
-    data = sorted(data, key=lambda tup: tup[2], reverse=True)
+    if args.dominated:
+        title = "Regularization vs Criterion loss Pareto frontier"
+        x_axis_all = [entry[REG_LOSS] for entry in orig_hist.values()]
+        y_axis_all = [entry[CRITERION_LOSS] for entry in orig_hist.values()]
+        plt.scatter(x_axis_all, y_axis_all, label="Dominated Results")
+        plt.scatter(x_axis, y_axis, label="Optimal Results")
+        plt.xscale('log')
+    else:
+        title = "Regularization vs Criterion loss per weight of regularization"
+        weights = [weight[0] for weight in hist.keys()]
+        data = zip(x_axis, y_axis, weights)
+        data = sorted(data, key=lambda tup: tup[2], reverse=True)
 
-    # Plot the data
-    cmap = get_cmap(len(y_axis) + 1)
-    plt.gcf().set_size_inches(args.inches, forward=True)
-    for i, (x, y, w) in enumerate(data):
-        plt.scatter(x, y, color=cmap(i), label="w = %.0E" % w)
+        # Plot the data
+        cmap = get_cmap(len(y_axis) + 1)
+        plt.gcf().set_size_inches(args.inches, forward=True)
+        for i, (x, y, w) in enumerate(data):
+            plt.scatter(x, y, color=cmap(i), label="w = %.0E" % w)
 
     # Add a legend
     plt.legend()
