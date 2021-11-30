@@ -205,7 +205,7 @@ def process_logs(args) -> DataFrame:
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser("train_search")
+    parser = argparse.ArgumentParser("analyse logs")
     input_group = parser.add_mutually_exclusive_group(required=True)
     input_group.add_argument("-t", "--train", type=argparse.FileType('r'), nargs='+',
                              help="Train/Evaluation stage logs")
