@@ -77,17 +77,17 @@ def plot_correlation(df: DataFrame, filename="correlation_matrix.png"):
     data = np.abs(df.corr(method="spearman").to_numpy())
     plt.matshow(data, fignum=f.number)
 
-    #legend
+    # legend
     plt.xticks(range(df.select_dtypes(['number']).shape[1]), df.select_dtypes(['number']).columns, fontsize=14,
                rotation=45, ha="left", rotation_mode="anchor")
     plt.yticks(range(df.select_dtypes(['number']).shape[1]), df.select_dtypes(['number']).columns, fontsize=14)
 
-    #colorbar
+    # colorbar
     cb = plt.colorbar()
     cb.ax.tick_params(labelsize=14)
     plt.clim(min(0.5, np.min(data)))
 
-    #cell values
+    # cell values
     for (x, y), value in np.ndenumerate(data):
         plt.text(x, y, f"{value:.2f}", va="center", ha="center")
 
@@ -170,20 +170,11 @@ def process_logs(args) -> DataFrame:
             model = NetworkCIFAR(init_channels, 10, layers, auxiliary, genotype)
             model.cuda()
             model.drop_path_prob = drop_path_prob
-            parameters = int(count_parameters(model))
+            parameters, net_flops, total_time_gpu, total_time_cpu = model_profiling(model, name)
             row.append(parameters)
-            data_shape = (1, 3, 32, 32)
-            net_flops = int(count_net_flops(model, data_shape=data_shape))
             row.append(net_flops)
-            total_time, measured_latency = measure_net_latency(model, l_type='gpu8', fast=True,
-                                                               input_shape=data_shape[1:], clean=True)
-            row.append(total_time)
-            print("latency GPU %s: %s" % (name, measured_latency))
-
-            total_time, measured_latency = measure_net_latency(model, l_type='cpu', fast=True,
-                                                               input_shape=data_shape[1:], clean=True)
-            row.append(total_time)
-            print("latency CPU %s: %s" % (name, measured_latency))
+            row.append(total_time_gpu)
+            row.append(total_time_cpu)
         except Exception as e:
             print(f"Error '{e}' while processing file {log.name}")
 
@@ -202,6 +193,19 @@ def process_logs(args) -> DataFrame:
     print(df)
     df.to_csv(args.output)
     return df
+
+
+def model_profiling(model: NetworkCIFAR, model_name: str) -> tuple:
+    parameters = int(count_parameters(model))
+    data_shape = (1, 3, 32, 32)
+    net_flops = int(count_net_flops(model, data_shape=data_shape))
+    total_time_gpu, measured_latency = measure_net_latency(model, l_type='gpu8', fast=True,
+                                                           input_shape=data_shape[1:], clean=True)
+    print("latency GPU %s: %s" % (model_name, measured_latency))
+    total_time_cpu, measured_latency = measure_net_latency(model, l_type='cpu', fast=True,
+                                                           input_shape=data_shape[1:], clean=True)
+    print("latency CPU %s: %s" % (model_name, measured_latency))
+    return parameters, net_flops, total_time_gpu, total_time_cpu
 
 
 if __name__ == '__main__':
@@ -230,7 +234,3 @@ if __name__ == '__main__':
 
     clean_df = df.loc[:, np.invert(df.columns.isin([TRAIN_LOSS, TRAIN_ACC, FLOPS]))]
     plot_correlation(clean_df, f"{filename}_correlation_matrix.png")
-
-
-
-

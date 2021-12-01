@@ -38,6 +38,10 @@ def plot_frontier(title: str, weight_est: WeightEstimator, save_path="", xlabel=
     plt.show()
 
 
+def create_genotype_name(weight: np.ndarray, loss: str) -> str:
+    return ("%s_%.0E" % (loss, weight[0])).replace("-", "").lower()
+
+
 if __name__ == '__main__':
     log = logging.getLogger("multiobjective")
     parser = create_parser()
@@ -120,7 +124,7 @@ if __name__ == '__main__':
             opt_criterion_losses.append(criterion)
             opt_lambdas.append(weight[0] / weight[1])
             # eg: l2_loss_1e3
-            gen_name = ("%s_%.0E" % (REG, weight[0])).replace("-", "").lower()
+            gen_name = create_genotype_name(weight, REG)
             log.info("Optimal weight = %s, reg loss = %f, criterion loss = %f\n%s = %s",
                      weight, reg, criterion, gen_name, gen)
 

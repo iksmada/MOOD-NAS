@@ -306,6 +306,12 @@ l1_loss_2e02_l2_3e04 = Genotype(
     reduce=[('max_pool_3x3', 0), ('dil_conv_5x5', 1), ('max_pool_3x3', 2), ('dil_conv_3x3', 0), ('max_pool_3x3', 3),
             ('max_pool_3x3', 2), ('max_pool_3x3', 4), ('max_pool_3x3', 3)], reduce_concat=range(2, 6))
 
+l1_loss_2e01 = Genotype(
+    normal=[('avg_pool_3x3', 0), ('skip_connect', 1), ('avg_pool_3x3', 2), ('avg_pool_3x3', 0), ('avg_pool_3x3', 1),
+            ('skip_connect', 0), ('avg_pool_3x3', 3), ('max_pool_3x3', 4)], normal_concat=range(2, 6),
+    reduce=[('max_pool_3x3', 1), ('skip_connect', 0), ('max_pool_3x3', 2), ('max_pool_3x3', 0), ('max_pool_3x3', 2),
+            ('max_pool_3x3', 3), ('avg_pool_3x3', 1), ('skip_connect', 0)], reduce_concat=range(2, 6))
+
 l1_loss_6e05 = Genotype(
     normal=[('skip_connect', 0), ('dil_conv_5x5', 1), ('skip_connect', 2), ('skip_connect', 0), ('sep_conv_5x5', 2),
             ('skip_connect', 3), ('sep_conv_5x5', 0), ('sep_conv_3x3', 3)], normal_concat=range(2, 6),
