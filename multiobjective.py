@@ -13,7 +13,7 @@ from WeightEstimator import WeightEstimator
 from train_search import create_parser, L1_LOSS, L2_LOSS, CRITERION_LOSS, REG_LOSS, GENOTYPE
 
 
-def get_cmap(n, name='hsv'):
+def get_cmap(n, name='gist_rainbow'):
     """Returns a function that maps each index in 0, 1, ..., n-1 to a distinct
     RGB color; the keyword argument name must be a standard mpl colormap name."""
     return plt.cm.get_cmap(name, n)
@@ -34,7 +34,8 @@ def plot_frontier(title: str, weight_est: WeightEstimator, save_path="", xlabel=
     if ylabel is not None:
         plt.ylabel(ylabel)
     plt.legend()
-    plt.savefig(os.path.join(save_path, "frontier_%s.png" % str(len(weight_est.visited_pairs)).zfill(2)))
+    plt.savefig(os.path.join(save_path, "frontier_%s.png" % str(len(weight_est.visited_pairs)).zfill(2)),
+                bbox_inches='tight', dpi=100)
     plt.show()
 
 
@@ -115,29 +116,29 @@ if __name__ == '__main__':
     # remove not optimal
     opt_reg_losses = []
     opt_criterion_losses = []
-    opt_lambdas = []
+    opt_weights = []
     for reg, criterion, gen, weight in zip(reg_losses, criterion_losses, genotypes, hist[REG].keys()):
         candidate = np.array([reg, criterion])
         # check if candidate is optimal
         if np.any(np.all(candidate == weightEst.optimal_results, axis=1)):
             opt_reg_losses.append(reg)
             opt_criterion_losses.append(criterion)
-            opt_lambdas.append(weight[0] / weight[1])
+            opt_weights = weight[0]
             # eg: l2_loss_1e3
             gen_name = create_genotype_name(weight, REG)
             log.info("Optimal weight = %s, reg loss = %f, criterion loss = %f\n%s = %s",
                      weight, reg, criterion, gen_name, gen)
 
     # order by lambda to make legend linear
-    data = zip(opt_reg_losses, opt_criterion_losses, opt_lambdas)
+    data = zip(opt_reg_losses, opt_criterion_losses, opt_weights)
     data = sorted(data, key=lambda tup: tup[2], reverse=True)
 
     plt.clf()
     # Plot the data
-    cmap = get_cmap(len(opt_reg_losses) + 1)
+    cmap = get_cmap(len(opt_reg_losses))
     plt.gcf().set_size_inches(10, 7, forward=True)
-    for i, (x, y, l) in enumerate(data):
-        plt.scatter(x, y, color=cmap(i), label="λ = %.0E" % l)
+    for i, (x, y, w) in enumerate(data):
+        plt.scatter(x, y, color=cmap(i), label="$\\nu$ = %.0E" % w)
 
     # Add a legend
     plt.legend()
@@ -146,5 +147,5 @@ if __name__ == '__main__':
     plt.title("Regularization vs Criterion loss per weight of regularization")
 
     # Show the plot
-    plt.savefig(os.path.join(args.save, "losses.png"))
+    plt.savefig(os.path.join(args.save, "losses.png"), bbox_inches='tight', dpi=100)
     plt.show()

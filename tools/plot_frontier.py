@@ -100,10 +100,10 @@ if __name__ == '__main__':
         data = sorted(data, key=lambda tup: tup[2], reverse=True)
 
         # Plot the data
-        cmap = get_cmap(len(y_axis) + 1)
+        cmap = get_cmap(len(y_axis))
         plt.gcf().set_size_inches(args.inches, forward=True)
         for i, (x, y, w) in enumerate(data):
-            plt.scatter(x, y, color=cmap(i), label="w = %.0E" % w)
+            plt.scatter(x, y, color=cmap(i), label="$\\nu$ = %.0E" % w)
 
     # Add a legend
     plt.legend()
@@ -112,5 +112,5 @@ if __name__ == '__main__':
     plt.title(title)
 
     # Show the plot
-    plt.savefig(filename)
+    plt.savefig(filename, bbox_inches='tight', dpi=100)
     plt.show()

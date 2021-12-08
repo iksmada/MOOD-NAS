@@ -176,7 +176,7 @@ def main(args_temp, force_log=False):
     plt.xlabel('epoch', fontsize=12)
     plt.yscale('log')
     plt.ylabel('loss', fontsize=12)
-    plt.savefig(os.path.join(log_path, "loss.png"))
+    plt.savefig(os.path.join(log_path, "loss.png"), bbox_inches='tight', dpi=100)
     plt.show()
     plt.clf()
 
@@ -188,7 +188,7 @@ def main(args_temp, force_log=False):
     plt.xlabel('epoch', fontsize=12)
     plt.xscale('log')
     plt.ylabel('accuracy %', fontsize=12)
-    plt.savefig(os.path.join(log_path, "acc.png"))
+    plt.savefig(os.path.join(log_path, "acc.png"), bbox_inches='tight', dpi=100)
     plt.show()
     plt.clf()
 
@@ -200,7 +200,7 @@ def main(args_temp, force_log=False):
     plt.xlabel('epoch', fontsize=12)
     plt.xscale('log')
     plt.ylabel('accuracy %', fontsize=12)
-    plt.savefig(os.path.join(log_path, "top5.png"))
+    plt.savefig(os.path.join(log_path, "top5.png"), bbox_inches='tight', dpi=100)
     plt.show()
     plt.clf()
 

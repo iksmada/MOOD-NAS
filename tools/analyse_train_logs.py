@@ -4,6 +4,8 @@ import re
 
 import numpy as np
 import pandas as pd
+from matplotlib.cm import ScalarMappable
+from matplotlib.colors import Normalize, LogNorm
 
 from ofa.utils import count_parameters, count_net_flops, measure_net_latency
 import matplotlib.pyplot as plt
@@ -15,22 +17,32 @@ from model import NetworkCIFAR
 from multiobjective import get_cmap
 from train_search import L1_LOSS, L2_LOSS, TRAIN_ACC, VALID_ACC, CRITERION_LOSS, REG_LOSS
 
-WEIGHT = "weight"
+WEIGHT = "Weight"
 
 MODEL_NAME = "Model name"
-
 TRAIN_LOSS = "train_loss"
 VALID_LOSS = "valid_loss"
 TEST_LOSS = "test_loss"
 TEST_ACC = "test_acc"
-SEARCH_CRIT_LOSS = "Search criterion loss"
-SEARCH_REG_LOSS = "Search regularization loss"
-SEARCH_ACC = "Search accuracy"
+SEARCH_CRIT_LOSS = "Search crit loss"
+SEARCH_REG_LOSS = "Search reg loss"
+SEARCH_ACC = "Search acc"
 FLOPS = "FLOPs"
+PARAMETERS = "Parameters"
+LATENCY_CPU = "Latency CPU"
+
+name = {
+    TRAIN_LOSS: "Train loss",
+    TRAIN_ACC: "Train acc",
+    VALID_LOSS: "Valid loss",
+    VALID_ACC: "Valid acc",
+    TEST_LOSS: "Test loss",
+    TEST_ACC: "Test acc",
+}
 
 
 def plot_columns(df: DataFrame, x_column: str, y_column: str, filename="plot_table.png", negate: int = None,
-                 x_scale='log', y_scale='log'):
+                 x_scale='log', y_scale='log', show_weights: bool = True, show_colorbar=False, inches: tuple = (6.4, 4.8)):
     """
     Plot DataFrame columns
 
@@ -41,46 +53,58 @@ def plot_columns(df: DataFrame, x_column: str, y_column: str, filename="plot_tab
     :param negate: Negate the values and add it to some offset passed as int here
     :param x_scale: {"linear", "log", "symlog", "logit", ...} or `.ScaleBase`
     :param y_scale: {"linear", "log", "symlog", "logit", ...} or `.ScaleBase`
+    :param show_weights: Show detailed weight values instead of colorbar
+    :param inches: Figure dimension width x height tuple in inches
     """
     plt.clf()
     x_axis = df.loc[:, x_column]
     y_axis = df.loc[:, y_column]
+    if isinstance(negate, (int, float)):
+        x_axis = negate - x_axis.to_numpy()
+        y_axis = negate - y_axis.to_numpy()
     weights = df.loc[:, WEIGHT]
 
-    data = zip(x_axis, y_axis, weights)
-    data = sorted(data, key=lambda tup: tup[2], reverse=True)
     # Plot the data
-    cmap = get_cmap(len(y_axis) + 1)
-    plt.gcf().set_size_inches(10, 7, forward=True)
-    for i, (x, y, w) in enumerate(data):
-        if isinstance(negate, (int, float)):
-            plt.scatter(negate - x, negate - y, color=cmap(i), label="w = %.0E" % w)
-        else:
-            plt.scatter(x, y, color=cmap(i), label="w = %.0E" % w)
+    cmap = get_cmap(len(y_axis))
+    plt.gcf().set_size_inches(inches, forward=True)
+    if show_weights:
+        data = zip(x_axis, y_axis, weights)
+        data = sorted(data, key=lambda tup: tup[2], reverse=True)
+        for i, (x, y, w) in enumerate(data):
+            plt.scatter(x, y, color=cmap(i), label="$\\nu$ = %.0E" % w)
+        # Add a legend
+        plt.legend()
 
-    # Add a legend
-    plt.legend()
-    plt.xlabel(x_column)
-    plt.ylabel(y_column)
+    else:
+        plt.scatter(x_axis, y_axis, c=range(len(y_axis)), cmap=cmap)
+        if show_colorbar:
+            cbar = plt.colorbar(ScalarMappable(norm=LogNorm(vmin=min(weights), vmax=max(weights)), cmap=cmap))
+            cbar.set_label("$\\nu$", rotation=0)
+
+    x_label = name.get(x_column, x_column)
+    plt.xlabel(x_label)
+    y_label = name.get(y_column, y_column)
+    plt.ylabel(y_label)
     plt.xscale(x_scale)
     plt.yscale(y_scale)
-    plt.title(f"{x_column} vs {y_column} per weight")
+    plt.title(f"{x_label} vs {y_label} per Weight ($\\nu$)")
 
     # Show the plot
-    plt.savefig(filename)
+    plt.savefig(filename, bbox_inches='tight', dpi=100)
     plt.show()
 
 
 def plot_correlation(df: DataFrame, filename="correlation_matrix.png"):
     plt.clf()
-    f = plt.figure(figsize=(19, 17))
+    f = plt.figure(figsize=(11, 10))
     data = np.abs(df.corr(method="spearman").to_numpy())
     plt.matshow(data, fignum=f.number)
 
     # legend
-    plt.xticks(range(df.select_dtypes(['number']).shape[1]), df.select_dtypes(['number']).columns, fontsize=14,
-               rotation=45, ha="left", rotation_mode="anchor")
-    plt.yticks(range(df.select_dtypes(['number']).shape[1]), df.select_dtypes(['number']).columns, fontsize=14)
+    columns = [name.get(column, column) for column in df.select_dtypes(['number']).columns]
+    plt.xticks(range(df.select_dtypes(['number']).shape[1]), columns, fontsize=14, rotation=45, ha="left",
+               rotation_mode="anchor")
+    plt.yticks(range(df.select_dtypes(['number']).shape[1]), columns, fontsize=14)
 
     # colorbar
     cb = plt.colorbar()
@@ -89,7 +113,7 @@ def plot_correlation(df: DataFrame, filename="correlation_matrix.png"):
 
     # cell values
     for (x, y), value in np.ndenumerate(data):
-        plt.text(x, y, f"{value:.2f}", va="center", ha="center")
+        plt.text(x, y, f"{value:.2f}", va="center", ha="center", fontsize=18)
 
     plt.title('Absolute Spearman Rank Correlation Matrix', fontsize=16)
     # Show the plot
@@ -185,8 +209,8 @@ def process_logs(args) -> DataFrame:
                                      VALID_LOSS, VALID_ACC,
                                      TEST_LOSS, TEST_ACC,
                                      SEARCH_CRIT_LOSS, SEARCH_REG_LOSS, SEARCH_ACC,
-                                     "Parameters", FLOPS,
-                                     "Latency GPU", "Latency CPU"])
+                                     PARAMETERS, FLOPS,
+                                     "Latency GPU", LATENCY_CPU])
     df.set_index(keys=MODEL_NAME, inplace=True)
     df.sort_values(by=WEIGHT, inplace=True, ascending=False)
     pd.set_option("display.max_rows", None, "display.max_columns", None, "display.width", None)
@@ -199,10 +223,10 @@ def model_profiling(model: NetworkCIFAR, model_name: str) -> tuple:
     parameters = int(count_parameters(model))
     data_shape = (1, 3, 32, 32)
     net_flops = int(count_net_flops(model, data_shape=data_shape))
-    total_time_gpu, measured_latency = measure_net_latency(model, l_type='gpu8', fast=True,
+    total_time_gpu, measured_latency = measure_net_latency(model, l_type='gpu8', fast=False,
                                                            input_shape=data_shape[1:], clean=True)
     print("latency GPU %s: %s" % (model_name, measured_latency))
-    total_time_cpu, measured_latency = measure_net_latency(model, l_type='cpu', fast=True,
+    total_time_cpu, measured_latency = measure_net_latency(model, l_type='cpu', fast=False,
                                                            input_shape=data_shape[1:], clean=True)
     print("latency CPU %s: %s" % (model_name, measured_latency))
     return parameters, net_flops, total_time_gpu, total_time_cpu
@@ -216,6 +240,9 @@ if __name__ == '__main__':
     parser.add_argument("-s", "--search", type=argparse.FileType('r'), nargs='+', required=False,
                         help="Search stage logs")
     input_group.add_argument("-d", "--data", type=argparse.FileType('r'), help="Csv table generated from this code")
+    parser.add_argument('-c', '--colorbar', action='store_true', default=False,
+                        help='Show colorbar instead of precise values')
+    parser.add_argument("-i", "--inches", type=float, help="Image size in inches", nargs='+', default=(6.4, 4.8))
     parser.add_argument("-o", "--output", type=str, required=False, help="Output file name", default="loss_table.csv")
     args = parser.parse_args()
 
@@ -228,9 +255,14 @@ if __name__ == '__main__':
     clean_df = df.loc[:, np.invert(df.columns.isin([TRAIN_LOSS, TRAIN_ACC, VALID_LOSS, VALID_ACC]))]
     print(clean_df)
     filename, file_extension = os.path.splitext(args.output)
-    plot_columns(df, SEARCH_CRIT_LOSS, VALID_LOSS, f"{filename}_search_vs_valid_loss.png")
-    plot_columns(df, SEARCH_ACC, VALID_ACC, f"{filename}_search_vs_valid_acc.png", 100)
-    plot_columns(df, WEIGHT, VALID_ACC, f"{filename}_weight_vs_valid_acc.png", y_scale='linear')
+    plt.gcf().set_size_inches(args.inches, forward=True)
+    plot_columns(df, SEARCH_CRIT_LOSS, VALID_LOSS, f"{filename}_search_vs_valid_loss.png",
+                 show_weights=not args.colorbar, show_colorbar=args.colorbar, inches=args.inches)
+    plot_columns(df, SEARCH_ACC, VALID_ACC, f"{filename}_search_vs_valid_acc.png", 100, show_weights=not args.colorbar,
+                 show_colorbar=args.colorbar, inches=args.inches)
+    plot_columns(df, WEIGHT, VALID_ACC, f"{filename}_weight_vs_valid_acc.png", y_scale='linear',
+                 show_weights=not args.colorbar, show_colorbar=args.colorbar, inches=args.inches)
 
-    clean_df = df.loc[:, np.invert(df.columns.isin([TRAIN_LOSS, TRAIN_ACC, FLOPS]))]
+    clean_df = df.loc[:, np.invert(df.columns.isin([
+        TRAIN_LOSS, TRAIN_ACC, VALID_LOSS, TEST_LOSS, SEARCH_REG_LOSS, SEARCH_CRIT_LOSS, PARAMETERS, LATENCY_CPU]))]
     plot_correlation(clean_df, f"{filename}_correlation_matrix.png")
