@@ -77,10 +77,10 @@ def main(args):
     indices = list(range(num_train))
     split = int(np.floor(args.train_portion * num_train))
 
-    # train_queue = DataLoader(
-    #     train_data, batch_size=args.batch_size,
-    #     sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
-    #     pin_memory=True, num_workers=4)
+    train_queue = DataLoader(
+        train_data, batch_size=args.batch_size,
+        sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
+        pin_memory=True, num_workers=4)
 
     valid_queue = torch.utils.data.DataLoader(
         valid_data, batch_size=args.batch_size,
@@ -104,12 +104,15 @@ def main(args):
     test_acc, top5_acc, test_obj = infer(test_queue, models, criterion, weights / weights.amax(dim=0))
     logging.info('test loss %e, acc top1: %.2f, acc top5 %.2f', test_obj, test_acc, top5_acc)
 
-    # train_acc, top5_acc, train_obj = infer(train_queue, models, criterion)
-    # logging.info('train loss %e, acc top1: %f, acc top5 %f', train_obj, train_acc, top5_acc)
+    train_acc, top5_acc, train_obj = infer(train_queue, models, criterion)
+    logging.info('train loss %e, acc top1: %f, acc top5 %f', train_obj, train_acc, top5_acc)
 
 
 def calc_ensemble(train_queue, models: dict, n_classes: int = None) -> torch.Tensor:
     weights = []
+    # initialize with ones to avoid zero weights
+    if n_classes:
+        weights.append(torch.ones(len(models), n_classes, device='cuda'))
     with torch.no_grad():
         for step, (input, target) in enumerate(train_queue):
             input = Variable(input).cuda()
