@@ -20,7 +20,6 @@ from sklearn.model_selection import train_test_split
 TRAIN_ACC = "train_acc"
 VALID_ACC = "valid_acc"
 REG_LOSS = "reg_loss"
-WEIGHT = "weight"
 L1_LOSS = "L1_loss"
 L2_LOSS = "L2_loss"
 CRITERION_LOSS = "criterion_loss"

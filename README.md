@@ -1,114 +1,143 @@
+# MOOD-NAS
+One network for each mood.
+
 ## Introduction
 
-**PC-DARTS** has been accepted for spotlight presentation at ICLR 2020!
+**MOOD NAS** (MultiObjective Differentiable Neural Architecture Search) explore the common neglected conflicting objectives on NAS formulation. This way focuses on gradually adding regularization (complexity measure) strength to the model, thus filling an approximation of the Pareto frontier with efficient learning models exhibiting distinct trade-offs between error and model complexity. ~~For a detailed description of technical details and experimental results, please refer to our paper: MultiObjective Differentiable Neural Architecture Search~~ TBD
 
-**PC-DARTS** is a memory-efficient differentiable architecture method based on **DARTS**. It mainly focuses on reducing the large memory cost of the super-net in one-shot NAS method, which means that it can also be combined with other one-shot NAS method e.g. **ENAS**. Different from previous methods that sampling operations, PC-DARTS samples channels of the constructed super-net. Interestingly, though we introduced randomness during the search process, the performance of the searched architecture is **better and more stable than DARTS!** For a detailed description of technical details and experimental results, please refer to our paper:
+Authors: [Raphael Adamski](https://www.linkedin.com/in/iksmada/?locale=en_US), [Marcos Medeiros Raimundo](https://marcosmrai.github.io/), [Fernando Jose Von Zuben](https://www.dca.fee.unicamp.br/~vonzuben/).
 
-[Partial Channel Connections for Memory-Efficient Differentiable Architecture Search](https://openreview.net/forum?id=BJlS634tPr)
-
-[Yuhui Xu](http://yuhuixu1993.github.io), [Lingxi Xie](http://lingxixie.com/), [Xiaopeng Zhang](https://sites.google.com/site/zxphistory/), Xin Chen, [Guo-Jun Qi](http://www.eecs.ucf.edu/~gqi/), [Qi Tian](https://scholar.google.com/citations?user=61b6eYkAAAAJ&hl=zh-CN) and Hongkai Xiong.
-
-**This code is based on the implementation of  [DARTS](https://github.com/quark0/darts).**
-## Updates
-- The implementation of random sampling is also uploaded for your consideration.
-- The main file for search on ImageNet has been uploaded `train_search_imagenet.py`.
+**This code is based on the implementation of [PC-DARTS](https://github.com/yuhuixu1993/PC-DARTS) which, in turn, is based on [DARTS](https://github.com/quark0/darts).**
 
 ## Results
 ### Results on CIFAR10
-Method | Params(M) | Error(%)| Search-Cost
---- | --- | --- | ---
-AmoebaNet-B|2.8|2.55|3150
-DARTSV1 | 3.3 | 3.00 | 0.4
-DARTSV2 | 3.3 | 2.76 | 1.0
-SNAS    | 2.8 | 2.85 |1.5
-PC-DARTS | 3.6 | **2.57** | **0.1**
 
-Only **0.1 GPU-days** are used for a search on CIFAR-10!
-### Results on ImageNet
-Method | FLOPs |Top-1 Error(%)|Top-5 Error(%)| Search-Cost
---- | --- | --- | --- | ---
-NASNet-A |564|26.0|8.4|1800
-AmoebaNet-B|570|24.3|7.6|3150
-PNAS     |588 |25.8 |8.1|225
-DARTSV2 | 574 | 26.7 | 8.7 | 1.0
-SNAS    | 522 | 27.3 | 9.3 |1.5
-PC-DARTS | 597 | **24.2** | **7.3** | 3.8
+### L2 loss vs Cross-entropy loss
+![L2 loss vs Cross-entropy loss Pareto-frontier](image/l1_0_l2_vary.png?raw=true)
 
-Search a good arcitecture on ImageNet by using the search space of DARTS(**First Time!**).
+### L1 loss vs Cross-entropy loss
+![L1 loss vs Cross-entropy loss Pareto-frontier](image/l1_vary_l2_fixed.png?raw=true)
+
+Smallest weights on above Pareto-frontier:
+
+| Weight      | Params(M) | Error(%) |
+|-------------|:---------:|:--------:|
+| &nu; = 3e-6 |    3.1    |   3.15   |  
+| &nu; = 4e-6 |    4.0    |   3.18   |  
+| &nu; = 7e-6 |    3.3    |   3.14   |  
+| &nu; = 1e-4 |    4.3    |   2.98   |  
+| &nu; = 2e-4 |    4.0    |   3.82   |  
+| Ensemble    |   14.6    | **2.58** |  
+| AmoebaNet-B |    2.8    |   2.55   |
+| DARTSV1     |    3.3    |   3.00   |  
+| DARTSV2     |    3.3    |   2.76   |  
+| SNAS        |    2.8    |   2.85   | 
+| PC-DARTS    |    3.6    |   2.57   |  
+
+
 ## Usage
-#### Search on CIFAR10
+### Search on CIFAR10
 
-To run our code, you only need one Nvidia 1080ti(11G memory).
-```
-python train_search.py \\
-```
-#### Search on ImageNet
+To run the code, it is suggested a 12G memory GPU, but it can work with smaller sizes but slower (reduce the `batch_size` arg).
 
-Data preparation: 10% and 2.5% images need to be random sampled prior from earch class of trainingset as train and val, respectively. The sampled data is save into `./imagenet_search`.
-Note that not to use torch.utils.data.sampler.SubsetRandomSampler for data sampling as imagenet is too large.
-```
-python train_search_imagenet.py \\
-       --tmp_data_dir /path/to/your/sampled/data \\
-       --save log_path \\
-```
-#### The evaluation process simply follows that of DARTS.
+Framework flow:
+![Framework flow](image/framework.png?raw=true)
 
-##### Here is the evaluation on CIFAR10:
-
+#### Create the Pareto frontier
+L2 loss
 ```
-python train.py \\
+python multiobjective.py -o l2 --weight_decay 0.0
+```
+L1 loss
+```
+python multiobjective.py -o l1 --weight_decay 0.0
+```
+L1 loss with fixed value of l2
+```
+python multiobjective.py -o l1 --weight_decay 3e-4
+```
+Other parameters are compatible with `python train_search.py` original arguments.
+
+#### Make the code selection
+
+Run the following tool to give you more information about the samples found during above search process like latency, FLOPs, params and useful plots.
+``` 
+export PYTHONPATH=$PYTHONPATH:..; \\
+python tools/analyse_search_logs.py -l log.txt
+```
+The `log.txt` is inside output folder of `multiobjective.py` run.
+
+#### Evaluate arch code in batch
+
+The evaluation process simply follows PC-DARTS configuration. Moreover, we created a script to predict GPU memory consumption automatically to make training various codes (with different size and `batch_size`) easily. More information about this in the appendix.
+
+``` 
+python batch_train.py --archs CODE [CODE ...] \\
        --auxiliary \\
        --cutout \\
 ```
 
-##### Here is the evaluation on ImageNet (mobile setting):
+The `CODE` should be a variable name on genotypes.py file (e.g. `PC_DARTS_cifar` or `l2_loss_2e01`). Other parameters are compatible with `python train.py` original arguments.
+
+#### Make the model selection
+
+Run the following tool to give you more information about the models evaluated during above training process like latency, FLOPs, params and useful plots.
+``` 
+export PYTHONPATH=$PYTHONPATH:..; \\
+python tools/analyse_train_logs.py -s search_log [search_log ...] -t train_log [train_log ...]
 ```
-python train_imagenet.py \\
-       --tmp_data_dir /path/to/your/data \\
-       --save log_path \\
+The `search_log` is inside output folder of `multiobjective.py` run.
+The `train_log` is inside each output folder of `batch_train.py` runs (each model evaluation create an evaluation log folder).
+
+#### Ensemble generation
+To create an ensemble from trained model run the following script:
+``` 
+python ensemble.py --models_folder log_folder \\
+       --calculate \\
        --auxiliary \\
-       --note note_of_this_run
+       --cutout \\
 ```
-## Pretrained models
-Coming soon!.
+
+The `log_folder` should be a path to a folder containing evaluation log sub folders. `--calculate` with calculate the weight of the models given the training set metrics. Other parameters are compatible with `python train.py` original arguments.
 
 ## Notes
-- For the codes in the main branch, `python2 with pytorch(3.0.1)` is recommended （running on `Nvidia 1080ti`）. We also provided codes in the `V100_python1.0` if you want to implement PC-DARTS on `Tesla V100` with `python3+` and `pytorch1.0+`.
-
-- You can even run the codes on a GPU with memory only **4G**. PC-DARTS only costs less than 4G memory, if we use the same hyper-parameter settings as DARTS(batch-size=64).
-
-- You can search on ImageNet by `model_search_imagenet.py`! The training file for search on ImageNet will be uploaded after it is cleaned or you can generate it according to the train_search file on CIFAR10 and the evluate file on ImageNet. Hyperparameters are reported in our paper! The search cost 11.5 hours on 8 V100 GPUs(16G each). If you have V100(32G) you can further increase the batch-size.  
-
-- We random sample 10% and 2.5% from each class of training dataset of ImageNet. There are still 1000 classes! Replace `input_search, target_search = next(iter(valid_queue))` with following codes would be much faster:
-
-```
-    try:
-      input_search, target_search = next(valid_queue_iter)
-    except:
-      valid_queue_iter = iter(valid_queue)
-      input_search, target_search = next(valid_queue_iter)
-```
-
-- The main codes of PC-DARTS are in the file `model_search.py`. As descriped in the paper, we use an efficient way to implement the channel sampling. First, a fixed sub-set of the input is selected to be fed into the candidate operations, then the concated output is swaped. Two efficient swap operations are provided: channel-shuffle and channel-shift. For the edge normalization, we define edge parameters(beta in our codes) along with the alpha parameters in the original darts codes. 
-
-- The implementation of random sampling is also provided `model_search_random.py`. It also works while channel-shuffle may have better performance.
-
-- As PC-DARTS is an ultra memory-efficient NAS methods. It has potentials to be implemented on other tasks such as detection and segmentation.
+- All scripts from PC-DARTS were update and are now compatible with `python3+` and `pytorch1.8.1+`. We ran all expriments on a `Tesla V100` GPU.
+- All Pareto optimal codes (Genotypes) found on the search stage (using all three cases) are available at `genotypes.py` file.
 
 ## Related work
 
-[Progressive Differentiable Architecture Search](https://github.com/chenxin061/pdarts)
+[Partial Channel Connections for Memory-Efficient Differentiable Architecture Search](https://github.com/yuhuixu1993/PC-DARTS)
 
 [Differentiable Architecture Search](https://github.com/quark0/darts)
+
 ## Reference
 
 If you use our code in your research, please cite our paper accordingly.
-```Latex
-@inproceedings{
-xu2020pcdarts,
-title={{\{}PC{\}}-{\{}DARTS{\}}: Partial Channel Connections for Memory-Efficient Architecture Search},
-author={Yuhui Xu and Lingxi Xie and Xiaopeng Zhang and Xin Chen and Guo-Jun Qi and Qi Tian and Hongkai Xiong},
-booktitle={International Conference on Learning Representations},
-year={2020},
-url={https://openreview.net/forum?id=BJlS634tPr}
-}
+
+TDB
+
+## Appendix
+
+### GPU memory estimator
+
+In order to create a naive estimator to memory consumption and avoid the cumbersome work to rune the `batch_size` for each architecture under evaluation, we create a [dataset](batch_data.csv?raw=true) and a simple predictor using Polynomial Ridge regression.
+
+#### How to use
+
+```python
+import pickle
+# load mode, sklearn is necessary
+batch_model = pickle.load(open("batch_predict.pkl", "rb")) 
+
+batch_size = 200 # polite guess
+params_in_millions=3.63 # PC-DARTS size
+# predict memory consumption given the number of params and batch_size
+consumption = batch_model.predict([[params_in_millions, batch_size]])
+```
+
+#### How to train a new model
+
+``` 
+python batch_size_predict.py --data csv_file
+```
+where the `csv_file` should has the same format of the [batch_data.csv](batch_data.csv?raw=true) with columns 'model size' 'batch size' and 'GPU mb'

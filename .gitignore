@@ -2,11 +2,8 @@ venv*/
 data/
 log.txt
 *.pt
-*.png
 *.jpeg
-*.jpg
 .idea/
-*.pdf
 *.pyc
 *.csv
 *.txt

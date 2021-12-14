@@ -1,3 +1,5 @@
+import argparse
+
 import numpy as np
 from sklearn import linear_model
 from sklearn.metrics import mean_absolute_error, max_error, mean_absolute_percentage_error
@@ -9,7 +11,11 @@ import pickle
 MODEL_NAME = 'batch_predict.pkl'
 
 if __name__ == '__main__':
-    df = pd.read_csv("batch_data.csv")
+    parser = argparse.ArgumentParser("Train memory consumption predictor")
+    parser.add_argument("-d", "--data", type=argparse.FileType('r'), required=True,
+                        help="CSV file with columns 'model size' 'batch size' and 'GPU mb'")
+    args = parser.parse_args()
+    df = pd.read_csv(args.data)
 
     data = df[df.columns[:-1]].to_numpy()
     target = df[df.columns[-1]].to_numpy()

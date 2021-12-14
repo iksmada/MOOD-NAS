@@ -6,13 +6,12 @@ import pandas as pd
 
 from pandas import DataFrame
 
+from genotypes import Genotype
 from model import NetworkCIFAR
 from multiobjective import create_genotype_name
-from tools.analyse_train_logs import plot_columns, plot_correlation, model_profiling
+from tools.analyse_train_logs import plot_columns, plot_correlation, model_profiling, LATENCY_CPU, WEIGHT
 from tools.plot_frontier import filter_hist
 from train_search import L1_LOSS, L2_LOSS, TRAIN_ACC, VALID_ACC, CRITERION_LOSS, REG_LOSS, SIZE, GENOTYPE
-
-WEIGHT = "weight"
 
 MODEL_NAME = "Model name"
 
@@ -79,11 +78,11 @@ def process_logs(args) -> DataFrame:
 
         if len(row) > 0:
             data.append(row)
-    df = pd.DataFrame(data, columns=[MODEL_NAME, WEIGHT, "Size",
+    df = pd.DataFrame(data, columns=[MODEL_NAME, WEIGHT, "Params",
                                      SEARCH_TRAIN_ACC, SEARCH_VAL_ACC,
                                      SEARCH_CRIT_LOSS, SEARCH_REG_LOSS,
                                      "Parameters", FLOPS,
-                                     "Latency GPU", "Latency CPU"])
+                                     "Latency GPU", LATENCY_CPU])
     df.set_index(keys=MODEL_NAME, inplace=True)
     df.sort_values(by=WEIGHT, inplace=True, ascending=False)
     pd.set_option("display.max_rows", None, "display.max_columns", None, "display.width", None)
