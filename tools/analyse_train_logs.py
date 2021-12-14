@@ -5,7 +5,7 @@ import re
 import numpy as np
 import pandas as pd
 from matplotlib.cm import ScalarMappable
-from matplotlib.colors import Normalize, LogNorm
+from matplotlib.colors import LogNorm
 
 from ofa.utils import count_parameters, count_net_flops, measure_net_latency
 import matplotlib.pyplot as plt
@@ -204,7 +204,7 @@ def process_logs(args) -> DataFrame:
 
         if len(row) > 0:
             data.append(row)
-    df = pd.DataFrame(data, columns=[MODEL_NAME, WEIGHT, "Size",
+    df = pd.DataFrame(data, columns=[MODEL_NAME, WEIGHT, "Params",
                                      TRAIN_LOSS, TRAIN_ACC,
                                      VALID_LOSS, VALID_ACC,
                                      TEST_LOSS, TEST_ACC,
