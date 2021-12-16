@@ -3,7 +3,7 @@ One network for each mood.
 
 ## Introduction
 
-**MOOD NAS** (MultiObjective Differentiable Neural Architecture Search) explore the common neglected conflicting objectives on NAS formulation. This way focuses on gradually adding regularization (complexity measure) strength to the model, thus filling an approximation of the Pareto frontier with efficient learning models exhibiting distinct trade-offs between error and model complexity. ~~For a detailed description of technical details and experimental results, please refer to our paper: MultiObjective Differentiable Neural Architecture Search~~ TBD
+**MOOD NAS** (MultiObjective Optimization Differentiable Neural Architecture Search) explore the common neglected conflicting objectives on NAS formulation. This way focuses on gradually adding regularization (complexity measure) strength to the model, thus filling an approximation of the Pareto frontier with efficient learning models exhibiting distinct trade-offs between error and model complexity. ~~For a detailed description of technical details and experimental results, please refer to our paper: MultiObjective Differentiable Neural Architecture Search~~ TBD
 
 Authors: [Raphael Adamski](https://www.linkedin.com/in/iksmada/?locale=en_US), [Marcos Medeiros Raimundo](https://marcosmrai.github.io/), [Fernando Jose Von Zuben](https://www.dca.fee.unicamp.br/~vonzuben/).
 
@@ -120,7 +120,7 @@ TDB
 
 ### GPU memory estimator
 
-In order to create a naive estimator to memory consumption and avoid the cumbersome work to rune the `batch_size` for each architecture under evaluation, we create a [dataset](batch_data.csv?raw=true) and a simple predictor using Polynomial Ridge regression.
+In order to create a naive estimator to memory consumption and avoid the cumbersome work to tune the `batch_size` for each architecture under evaluation, we create a [dataset](batch_data.csv?raw=true) and a simple predictor using Polynomial Ridge regression.
 
 #### How to use
 
