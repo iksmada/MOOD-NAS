@@ -55,7 +55,7 @@ def create_parser():
     parser.add_argument('--seed', type=int, default=0, help='random seed')
     parser.add_argument('--arch', type=str, default='PC_DARTS_cifar', help='which architecture to use')
     parser.add_argument('--grad_clip', type=float, default=5, help='gradient clipping')
-    parser.add_argument('--train_portion', type=float, default=0.9, help='portion of training data')
+    parser.add_argument('--train_portion', type=float, default=1.0, help='portion of training data')
     return parser
 
 
@@ -81,6 +81,10 @@ def main(args_temp, force_log=False):
 
     if not torch.cuda.is_available():
         log.info('no gpu device available')
+        sys.exit(1)
+
+    if args.train_portion <= 0 or args.train_portion > 1.0:
+        log.info('--train_portion should be between 0 and 1')
         sys.exit(1)
 
     np.random.seed(args.seed)

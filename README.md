@@ -72,12 +72,13 @@ The `log.txt` is inside output folder of `multiobjective.py` run.
 The evaluation process simply follows PC-DARTS configuration. Moreover, we created a script to predict GPU memory consumption automatically to make training various codes (with different size and `batch_size`) easily. More information about this in the appendix.
 
 ``` 
-python batch_train.py --archs CODE [CODE ...] \\
+python batch_train.py --archs CODE [CODE ...] --train_portion 1.0\\
        --auxiliary \\
        --cutout \\
 ```
 
 The `CODE` should be a variable name on genotypes.py file (e.g. `PC_DARTS_cifar` or `l2_loss_2e01`). Other parameters are compatible with `python train.py` original arguments.
+The `--train_portion` controls the train/validation portion. 0.9 for instance use 90% of data for training ans 10% for validation.
 
 #### Make the model selection
 
