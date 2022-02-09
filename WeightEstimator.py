@@ -60,6 +60,7 @@ class WeightEstimator:
                 continue
             # skip pairs that were already visited
             if self.was_visited(last_opt, curr_opt):
+                last_opt = curr_opt
                 continue
             distance = self.euclidean_distance(last_opt, curr_opt)
             if distance > max_distance:
