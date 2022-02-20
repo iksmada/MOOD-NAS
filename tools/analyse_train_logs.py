@@ -28,8 +28,10 @@ SEARCH_CRIT_LOSS = "Search crit loss"
 SEARCH_REG_LOSS = "Search reg loss"
 SEARCH_ACC = "Search acc"
 FLOPS = "FLOPs"
-PARAMETERS = "Parameters"
+PARAMETERS_DARTS = "Params"
+PARAMETERS_OFA = "Parameters"
 LATENCY_CPU = "Latency CPU"
+LATENCY_GPU = "Latency GPU"
 
 name = {
     TRAIN_LOSS: "Train loss",
@@ -99,12 +101,28 @@ def plot_correlation(df: DataFrame, filename="correlation_matrix.png"):
     f = plt.figure(figsize=(11, 10))
     data = np.abs(df.corr(method="spearman").to_numpy())
     plt.matshow(data, fignum=f.number)
+    ax = plt.gca()
+    ax.axvline(4.5, 0.0, 1, linewidth=4, color="red", linestyle="solid")
 
     # legend
     columns = [name.get(column, column) for column in df.select_dtypes(['number']).columns]
     plt.xticks(range(df.select_dtypes(['number']).shape[1]), columns, fontsize=14, rotation=45, ha="left",
                rotation_mode="anchor")
     plt.yticks(range(df.select_dtypes(['number']).shape[1]), columns, fontsize=14)
+    plt.xticks(range(df.select_dtypes(['number']).shape[1]), columns, fontsize=14, rotation=45, ha="left",
+               rotation_mode="anchor")
+    # Now let's add your additional information
+    ax.annotate('Search stage data',
+                xy=(190, -20), xytext=(0, 0),
+                xycoords=('axes points', 'axes points'),
+                textcoords='offset points',
+                size=14, ha='center', va='bottom')
+    ax.annotate('Evaluation stage data',
+                xy=(420, -20), xytext=(0, 0),
+                xycoords=('axes points', 'axes points'),
+                textcoords='offset points',
+                size=14, ha='center', va='bottom')
+
 
     # colorbar
     cb = plt.colorbar()
@@ -204,13 +222,13 @@ def process_logs(args) -> DataFrame:
 
         if len(row) > 0:
             data.append(row)
-    df = pd.DataFrame(data, columns=[MODEL_NAME, WEIGHT, "Params",
+    df = pd.DataFrame(data, columns=[MODEL_NAME, WEIGHT, PARAMETERS_DARTS,
                                      TRAIN_LOSS, TRAIN_ACC,
                                      VALID_LOSS, VALID_ACC,
                                      TEST_LOSS, TEST_ACC,
                                      SEARCH_CRIT_LOSS, SEARCH_REG_LOSS, SEARCH_ACC,
-                                     PARAMETERS, FLOPS,
-                                     "Latency GPU", LATENCY_CPU])
+                                     PARAMETERS_OFA, FLOPS,
+                                     LATENCY_GPU, LATENCY_CPU])
     df.set_index(keys=MODEL_NAME, inplace=True)
     df.sort_values(by=WEIGHT, inplace=True, ascending=False)
     pd.set_option("display.max_rows", None, "display.max_columns", None, "display.width", None)
@@ -264,5 +282,6 @@ if __name__ == '__main__':
                  show_weights=not args.colorbar, show_colorbar=args.colorbar, inches=args.inches)
 
     clean_df = df.loc[:, np.invert(df.columns.isin([
-        TRAIN_LOSS, TRAIN_ACC, VALID_LOSS, TEST_LOSS, SEARCH_REG_LOSS, SEARCH_CRIT_LOSS, PARAMETERS, LATENCY_CPU]))]
+        TRAIN_LOSS, TRAIN_ACC, VALID_LOSS, TEST_LOSS, SEARCH_REG_LOSS, SEARCH_CRIT_LOSS, PARAMETERS_OFA, LATENCY_CPU]))]
+    clean_df = clean_df[[WEIGHT, PARAMETERS_DARTS, FLOPS, LATENCY_GPU, SEARCH_ACC, VALID_ACC, TEST_ACC]]
     plot_correlation(clean_df, f"{filename}_correlation_matrix.png")
