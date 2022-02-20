@@ -144,7 +144,7 @@ class TestWeightEstimator(TestCase):
             logging.getLogger(self.instance.__class__.__name__).setLevel(logging.INFO)
             stats = train_search.main(args)
             print("stats = ", stats)
-            l2_stats = stats.get(L2_LOSS).get(args.l2_weight)
+            l2_stats = stats.get(L2_LOSS).get(tuple([args.l2_weight, args.criterion_weight]))
             reg_loss = l2_stats.get(REG_LOSS)
             print("reg_loss =", reg_loss)
             criterion_loss = l2_stats.get(CRITERION_LOSS)
