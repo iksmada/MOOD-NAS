@@ -44,7 +44,8 @@ name = {
 
 
 def plot_columns(df: DataFrame, x_column: str, y_column: str, filename="plot_table.png", negate: int = None,
-                 x_scale='log', y_scale='log', show_weights: bool = True, show_colorbar=False, inches: tuple = (6.4, 4.8)):
+                 x_scale='log', y_scale='log', show_weights: bool = True, show_colorbar=False,
+                 inches: tuple = (6.4, 4.8), x_label: str = None, y_label: str = None):
     """
     Plot DataFrame columns
 
@@ -80,16 +81,18 @@ def plot_columns(df: DataFrame, x_column: str, y_column: str, filename="plot_tab
     else:
         plt.scatter(x_axis, y_axis, c=range(len(y_axis)), cmap=cmap)
         if show_colorbar:
-            cbar = plt.colorbar(ScalarMappable(norm=LogNorm(vmin=min(weights), vmax=max(weights)), cmap=cmap))
+            cbar = plt.colorbar(ScalarMappable(norm=LogNorm(vmin=min(weights), vmax=max(weights)), cmap=cmap.reversed()))
             cbar.set_label("$\\nu$", rotation=0)
 
-    x_label = name.get(x_column, x_column)
+    if not x_label:
+        x_label = name.get(x_column, x_column)
     plt.xlabel(x_label)
-    y_label = name.get(y_column, y_column)
+    if not y_label:
+        y_label = name.get(y_column, y_column)
     plt.ylabel(y_label)
     plt.xscale(x_scale)
     plt.yscale(y_scale)
-    plt.title(f"{x_label} vs {y_label} per Weight ($\\nu$)")
+    plt.title(f"{x_label} vs {y_label} per Weight ($\\nu$)".replace(" (%)", ""))
 
     # Show the plot
     plt.savefig(filename, bbox_inches='tight', dpi=100)
@@ -277,9 +280,10 @@ if __name__ == '__main__':
     plot_columns(df, SEARCH_CRIT_LOSS, VALID_LOSS, f"{filename}_search_vs_valid_loss.png",
                  show_weights=not args.colorbar, show_colorbar=args.colorbar, inches=args.inches)
     plot_columns(df, SEARCH_ACC, VALID_ACC, f"{filename}_search_vs_valid_acc.png", 100, show_weights=not args.colorbar,
-                 show_colorbar=args.colorbar, inches=args.inches)
+                 show_colorbar=args.colorbar, inches=args.inches, x_label="Search error (%)", y_label="Valid error (%)")
     plot_columns(df, WEIGHT, VALID_ACC, f"{filename}_weight_vs_valid_acc.png", y_scale='linear',
-                 show_weights=not args.colorbar, show_colorbar=args.colorbar, inches=args.inches)
+                 show_weights=not args.colorbar, show_colorbar=args.colorbar, inches=args.inches,
+                 y_label="Valid acc (%)")
 
     clean_df = df.loc[:, np.invert(df.columns.isin([
         TRAIN_LOSS, TRAIN_ACC, VALID_LOSS, TEST_LOSS, SEARCH_REG_LOSS, SEARCH_CRIT_LOSS, PARAMETERS_OFA, LATENCY_CPU]))]
