@@ -35,7 +35,7 @@ ACCURACY = 'accuracy'
 def create_parser():
     parser = argparse.ArgumentParser("train")
     parser.add_argument('--data', type=str, default='data', help='location of the data corpus')
-    parser.add_argument('--set', type=str, default='cifar10', help='location of the data corpus')
+    parser.add_argument('--set', type=str, default='cifar10', choices=['cifar10', 'cifar100'], help='location of the data corpus')
     parser.add_argument('--batch_size', type=int, default=96, help='batch size')
     parser.add_argument('--learning_rate', type=float, default=0.025, help='init learning rate')
     parser.add_argument('--momentum', type=float, default=0.9, help='momentum')

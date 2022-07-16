@@ -185,7 +185,7 @@ def min_max_scaler(input):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser("ensemble")
     parser.add_argument('--data', type=str, default='data', help='location of the data corpus')
-    parser.add_argument('--set', type=str, default='cifar10', help='location of the data corpus')
+    parser.add_argument('--set', type=str, default='cifar10', choices=['cifar10', 'cifar100'], help='location of the data corpus')
     parser.add_argument('--batch_size', type=int, default=96, help='batch size')
     parser.add_argument('--report_lines', type=int, default=5, help='number of report lines per stage')
     parser.add_argument('--gpu', type=int, default=0, help='gpu device id')
