@@ -123,11 +123,11 @@ if __name__ == '__main__':
         if np.any(np.all(candidate == weightEst.optimal_results, axis=1)):
             opt_reg_losses.append(reg)
             opt_criterion_losses.append(criterion)
-            opt_weights = weight[0]
+            opt_weights.append(weight[0])
             # eg: l2_loss_1e3
             gen_name = create_genotype_name(weight, REG)
             log.info("Optimal weight = %s, reg loss = %f, criterion loss = %f\n%s = %s",
-                     weight, reg, criterion, gen_name, gen)
+                     weight[0], reg, criterion, gen_name, gen)
 
     # order by lambda to make legend linear
     data = zip(opt_reg_losses, opt_criterion_losses, opt_weights)
