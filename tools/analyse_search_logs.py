@@ -97,6 +97,7 @@ if __name__ == '__main__':
     input_group.add_argument("-l", "--log", type=argparse.FileType('r'), help="Multi search stage log")
     input_group.add_argument("-d", "--data", type=argparse.FileType('r'), help="Csv table generated from this code")
     parser.add_argument("-o", "--output", type=str, required=False, help="Output file name", default="search_table.csv")
+    parser.add_argument("-i", "--inches", type=float, help="Image size in inches", nargs='+', default=[6.4, 4.8])
     args = parser.parse_args()
 
     if args.data is None:
@@ -107,8 +108,10 @@ if __name__ == '__main__':
         print(df)
 
     filename, file_extension = os.path.splitext(args.output)
-    plot_columns(df, SEARCH_REG_LOSS, SEARCH_CRIT_LOSS, f"{filename}_crit_vs_reg_loss.png", y_scale='linear')
-    plot_columns(df, WEIGHT, SEARCH_VAL_ACC, f"{filename}_weight_vs_valid_acc.png", y_scale='linear')
+    plot_columns(df, SEARCH_REG_LOSS, SEARCH_CRIT_LOSS, f"{filename}_crit_vs_reg_loss.png", y_scale='linear',
+                 inches=args.inches)
+    plot_columns(df, WEIGHT, SEARCH_VAL_ACC, f"{filename}_weight_vs_valid_acc.png", y_scale='linear',
+                 inches=args.inches)
 
     plot_correlation(df, f"{filename}_correlation_matrix.png")
 
