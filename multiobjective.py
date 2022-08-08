@@ -2,6 +2,7 @@ import logging
 import os
 import sys
 import time
+from math import floor, log10
 
 import numpy as np
 import torch
@@ -39,8 +40,40 @@ def plot_frontier(title: str, weight_est: WeightEstimator, save_path="", xlabel=
     plt.show()
 
 
-def create_genotype_name(weight: np.ndarray, loss: str) -> str:
-    return ("%s_%.0E" % (loss, weight[0])).replace("-", "").lower()
+def create_genotype_name(weights: np.ndarray, loss: str, weights_list: list) -> str:
+    wl = weights[0]  # local weight
+    assert wl in weights_list, f"The weight {wl} must be in the weight list"
+    number_of_digits = 1
+    round_n = round_to_n(wl, number_of_digits)
+    while number_of_digits <= 5:
+        round_n = round_to_n(wl, number_of_digits)
+        round_n_list = [round_to_n(item, number_of_digits) for item in weights_list]
+        if round_n_list.count(round_n) > 1:
+            number_of_digits += 1
+        else:
+            break
+    if wl == 0:
+        exponent = 0
+    else:
+        # remove the negative value of the exponent
+        exponent = -int(floor(log10(abs(wl)))) + (number_of_digits - 1)
+    mantissa = round(round_n * pow(10, exponent))
+    # it should be negative exponent, but we are removing the negative symbol (-)
+    # of the exponent because var names cant contain this char
+    return "%s_%de%02d" % (loss, mantissa, exponent)
+
+
+def round_to_n(x: float, n: int) -> float:
+    """
+    Method to round to n significant figures.
+    :param x: number to be rounded to n significant digits
+    :param n: number of significant digits
+    :return: number with n significant digits
+    """
+    if x == 0:
+        return 0
+    else:
+        return round(x, -int(floor(log10(abs(x)))) + (n - 1))
 
 
 if __name__ == '__main__':
@@ -117,6 +150,7 @@ if __name__ == '__main__':
     opt_reg_losses = []
     opt_criterion_losses = []
     opt_weights = []
+    all_weights = [weight[0] for weight in hist[REG].keys()]
     for reg, criterion, gen, weight in zip(reg_losses, criterion_losses, genotypes, hist[REG].keys()):
         candidate = np.array([reg, criterion])
         # check if candidate is optimal
@@ -125,7 +159,7 @@ if __name__ == '__main__':
             opt_criterion_losses.append(criterion)
             opt_weights.append(weight[0])
             # eg: l2_loss_1e3
-            gen_name = create_genotype_name(weight, REG)
+            gen_name = create_genotype_name(weight, REG, all_weights)
             log.info("Optimal weight = %s, reg loss = %f, criterion loss = %f\n%s = %s",
                      weight[0], reg, criterion, gen_name, gen)
 

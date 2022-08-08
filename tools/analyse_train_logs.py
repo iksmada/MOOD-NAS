@@ -50,8 +50,8 @@ def plot_columns(df: DataFrame, x_column: str, y_column: str, filename="plot_tab
     Plot DataFrame columns
 
     :param df:
-    :param x_column: Column name to set as x axis
-    :param y_column: Column name to set as y axis
+    :param x_column: Column name to set as x-axis
+    :param y_column: Column name to set as y-axis
     :param filename: Save path
     :param negate: Negate the values and add it to some offset passed as int here
     :param x_scale: {"linear", "log", "symlog", "logit", ...} or `.ScaleBase`

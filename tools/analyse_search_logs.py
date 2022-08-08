@@ -40,9 +40,10 @@ def process_logs(args) -> DataFrame:
     # filter out dominated points
     filter_hist(hist)
     data = []
+    all_weights = [weight[0] for weight in hist.keys()]
     for weight, result in hist.items():
         row = []
-        name = create_genotype_name(weight, loss)
+        name = create_genotype_name(weight, loss, all_weights)
         try:
             row.append(name)
             weight_value = weight[0]
