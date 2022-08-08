@@ -5,5 +5,4 @@ log.txt
 *.jpeg
 .idea/
 *.pyc
-*.csv
 *.txt
