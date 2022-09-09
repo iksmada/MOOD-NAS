@@ -35,7 +35,8 @@ ACCURACY = 'accuracy'
 def create_parser():
     parser = argparse.ArgumentParser("train")
     parser.add_argument('--data', type=str, default='data', help='location of the data corpus')
-    parser.add_argument('--set', type=str, default='cifar10', choices=['cifar10', 'cifar100'], help='location of the data corpus')
+    parser.add_argument('--set', type=str, default='cifar10', choices=['cifar10', 'cifar100'],
+                        help='corpus name')
     parser.add_argument('--batch_size', type=int, default=96, help='batch size')
     parser.add_argument('--learning_rate', type=float, default=0.025, help='init learning rate')
     parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
@@ -132,10 +133,12 @@ def main(args_temp, force_log=False):
         sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
         pin_memory=True, num_workers=4)
 
-    valid_queue = torch.utils.data.DataLoader(
-        valid_data, batch_size=args.batch_size,
-        sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]),
-        pin_memory=True, num_workers=4)
+    valid_queue = None
+    if args.train_portion != 1.0:
+        valid_queue = torch.utils.data.DataLoader(
+            valid_data, batch_size=args.batch_size,
+            sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]),
+            pin_memory=True, num_workers=4)
 
     test_queue = DataLoader(
         test_data, batch_size=args.batch_size, shuffle=False, pin_memory=True, num_workers=2)
@@ -155,27 +158,41 @@ def main(args_temp, force_log=False):
         history[LOSS].append(train_obj)
         scheduler.step()
 
-        log.info("Validation")
-        valid_acc, valid_top5, valid_obj = infer(valid_queue, model, criterion)
-        log.info('%s %f', VALID_ACCURACY, valid_acc)
-        log.info('%s %f', VALID_LOSS, valid_obj)
-        history[VALID_ACCURACY].append(valid_acc)
-        history[VALID_TOP5].append(valid_top5)
-        history[VALID_LOSS].append(valid_obj)
+        if valid_queue:
+            log.info("Validation")
+            valid_acc, valid_top5, valid_obj = infer(valid_queue, model, criterion)
+            log.info('%s %f', VALID_ACCURACY, valid_acc)
+            log.info('%s %f', VALID_LOSS, valid_obj)
+            history[VALID_ACCURACY].append(valid_acc)
+            history[VALID_TOP5].append(valid_top5)
+            history[VALID_LOSS].append(valid_obj)
+        else:
+            log.info("Test")
+            acc, top5, obj = infer(test_queue, model, criterion)
+            log.info('%s %f', TEST_ACCURACY, acc)
+            log.info('%s %f', TEST_LOSS, top5)
+            history[TEST_ACCURACY].append(acc)
+            history[TEST_TOP5].append(top5)
+            history[TEST_LOSS].append(obj)
 
         utils.save(model, os.path.join(log_path, 'weights.pt'))
-
-    log.info("Test")
-    test_acc, test_top5, test_obj = infer(test_queue, model, criterion)
-    log.info('%s %f', TEST_ACCURACY, test_acc)
-    log.info('%s %f', TEST_TOP5, test_top5)
-    log.info('%s %f', TEST_LOSS, test_obj)
 
     plt.gcf().set_size_inches(10, 7, forward=True)
     # Show the loss plot
     plt.plot(history[LOSS], label="Train loss")
-    plt.plot(history[VALID_LOSS], label="Valid loss")
-    plt.title("Train and Valid loss per epoch")
+
+    if valid_queue:
+        plt.plot(history[VALID_LOSS], label="Valid loss")
+        plt.title("Train and Valid loss per epoch")
+    else:
+        plt.plot(history[TEST_LOSS], label="Test loss")
+        plt.title("Train and Test loss per epoch")
+        log.info("Test")
+        test_acc, test_top5, test_obj = infer(test_queue, model, criterion)
+        log.info('%s %f', TEST_ACCURACY, test_acc)
+        log.info('%s %f', TEST_TOP5, test_top5)
+        log.info('%s %f', TEST_LOSS, test_obj)
+
     plt.legend()
     plt.xlabel('epoch', fontsize=12)
     plt.yscale('log')
@@ -186,8 +203,12 @@ def main(args_temp, force_log=False):
 
     # Show the acc plot
     plt.plot(history[ACCURACY], label="Train accuracy")
-    plt.plot(history[VALID_ACCURACY], label="Valid accuracy")
-    plt.title("Train and Valid accuracy per epoch")
+    if valid_queue:
+        plt.plot(history[VALID_ACCURACY], label="Valid accuracy")
+        plt.title("Train and Valid accuracy per epoch")
+    else:
+        plt.plot(history[TEST_ACCURACY], label="Test accuracy")
+        plt.title("Train and Test accuracy per epoch")
     plt.legend()
     plt.xlabel('epoch', fontsize=12)
     plt.xscale('log')
@@ -198,8 +219,12 @@ def main(args_temp, force_log=False):
 
     # Show the top5 acc plot
     plt.plot(history[TOP5], label="Train top5 acc")
-    plt.plot(history[VALID_TOP5], label="Valid top5 acc")
-    plt.title("Train and Valid top5 accuracy per epoch")
+    if valid_queue:
+        plt.plot(history[VALID_TOP5], label="Valid top5 acc")
+        plt.title("Train and Valid top5 accuracy per epoch")
+    else:
+        plt.plot(history[TEST_TOP5], label="Test top5 acc")
+        plt.title("Train and Test top5 accuracy per epoch")
     plt.legend()
     plt.xlabel('epoch', fontsize=12)
     plt.xscale('log')
