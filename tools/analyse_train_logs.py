@@ -151,86 +151,96 @@ def plot_correlation(df: DataFrame, filename="correlation_matrix.png"):
 def process_logs(args) -> DataFrame:
     data = []
     for log in args.train:
-        row = []
-        try:
-            # evaluation stage metrics
-            lines = str(log.readlines())
-            match = re.search(r"arch='(?P<name>.*?)'", lines)
-            name = match.group("name")
-            row.append(name)
-            # l2_loss_2e01 -> 2e-01
-            weight_value = float(name.split("_")[2].replace("e", "e-"))
-            row.append(weight_value)
-            match = re.search(r"param size.*?(?P<value>\d*\.\d+)MB", lines)
-            param_size = float(match.group("value"))
-            row.append(param_size)
-            for metric in [TRAIN_LOSS, TRAIN_ACC, VALID_LOSS, VALID_ACC, TEST_LOSS, TEST_ACC]:
-                value = float(re.findall(rf'{metric}(?:uracy)? (?P<value>\d*\.\d+)', lines)[-1])
-                row.append(value)
-        except Exception as e:
-            print(f"Error '{e}' while processing file {log.name}")
-            while len(row) < 9:
-                row.append(None)
+        lines = str(log.readlines())
+        # if train is the batch train logs with all logs
+        matches = list(re.finditer(r"arch='(?P<name>.*?)'", lines))
+        for i, match in enumerate(matches):
+            arch = match.group("name")
+            row = [arch]
+            if i == 0:
+                start_lines = 0
+            else:
+                start_lines = match.start()
+            if i >= len(matches) - 1:
+                end_lines = len(lines)
+            else:
+                end_lines = matches[i+1].start() - 1
+            local_lines = lines[start_lines:end_lines]
+            try:
+                # evaluation stage metrics
+                # l2_loss_2e01 -> 2e-01
+                weight_value = float(arch.split("_")[2].replace("e", "e-"))
+                row.append(weight_value)
+                match = re.search(r"param size.*?(?P<value>\d*\.\d+)MB", local_lines)
+                param_size = float(match.group("value"))
+                row.append(param_size)
+                for metric in [TRAIN_LOSS, TRAIN_ACC, VALID_LOSS, VALID_ACC, TEST_LOSS, TEST_ACC]:
+                    value = float(re.findall(rf'{metric}(?:uracy)? (?P<value>\d*\.\d+)', local_lines)[-1])
+                    row.append(value)
+            except Exception as e:
+                print(f"Error '{e}' while processing file {log.name}")
+                while len(row) < 9:
+                    row.append(None)
 
-        try:
-            # search stage metrics
-            genotype = genotypes.__dict__[name]
-            genotype_str = str(genotype)
-            match = False
-            for s_log in args.search:
-                s_lines = str(s_log.readlines())
-                s_log.seek(0, 0)
-                # ((?!\\n).)* = anything except new line escaped
-                match = re.search(r"stats = (?P<stats>{((?!\\n).)*" + re.escape(genotype_str) + r".*?})\\n\",", s_lines)
-                if match:
-                    stats = eval(match.group("stats"))
-                    # L2 loss case
-                    if list(stats.get(L1_LOSS).keys())[0][0] == -1:
-                        LOSS = L2_LOSS
-                    # L1 loss case
-                    elif list(stats.get(L2_LOSS).keys())[0][0] == -1:
-                        LOSS = L1_LOSS
-                    else:
-                        raise Exception("L1 and L2 loss have w = -1")
-                    values = list(stats.get(LOSS).values())[0]
-                    search_criterion_loss = values[CRITERION_LOSS]
-                    search_reg_loss = values[REG_LOSS]
-                    row.append(search_criterion_loss)
-                    row.append(search_reg_loss)
-                    search_acc = values[VALID_ACC]
-                    row.append(search_acc)
-                    break
-            if not match:
-                raise Exception(f"Didn't find {name} on eval logs")
-        except Exception as e:
-            print(f"Error '{e}' while processing file {log.name}")
-            while len(row) < 12:
-                row.append(None)
+            try:
+                # search stage metrics
+                genotype = genotypes.__dict__[arch]
+                genotype_str = str(genotype)
+                match = False
+                for s_log in args.search:
+                    s_lines = str(s_log.readlines())
+                    s_log.seek(0, 0)
+                    # ((?!\\n).)* = anything except new line escaped
+                    match = re.search(r"stats = (?P<stats>{((?!\\n).)*" + re.escape(genotype_str) + r".*?})\\n\",", s_lines)
+                    if match:
+                        stats = eval(match.group("stats"))
+                        # L2 loss case
+                        if list(stats.get(L1_LOSS).keys())[0][0] == -1:
+                            LOSS = L2_LOSS
+                        # L1 loss case
+                        elif list(stats.get(L2_LOSS).keys())[0][0] == -1:
+                            LOSS = L1_LOSS
+                        else:
+                            raise Exception("L1 and L2 loss have w = -1")
+                        values = list(stats.get(LOSS).values())[0]
+                        search_criterion_loss = values[CRITERION_LOSS]
+                        search_reg_loss = values[REG_LOSS]
+                        row.append(search_criterion_loss)
+                        row.append(search_reg_loss)
+                        search_acc = values[VALID_ACC]
+                        row.append(search_acc)
+                        break
+                if not match:
+                    raise Exception(f"Didn't find {arch} on eval logs")
+            except Exception as e:
+                print(f"Error '{e}' while processing file {log.name}")
+                while len(row) < 12:
+                    row.append(None)
 
-        try:
-            # model profiling
-            genotype = genotypes.__dict__[name]
-            match = re.search(r"init_channels=(?P<value>\d+)", lines)
-            init_channels = int(match.group("value"))
-            match = re.search(r"layers=(?P<value>\d+)", lines)
-            layers = int(match.group("value"))
-            match = re.search(r"drop_path_prob=(?P<value>\d+\.\d+)", lines)
-            drop_path_prob = float(match.group("value"))
-            match = re.search(r"auxiliary=(?P<value>\w+)", lines)
-            auxiliary = bool(match.group("value"))
-            model = NetworkCIFAR(init_channels, 10, layers, auxiliary, genotype)
-            model.cuda()
-            model.drop_path_prob = drop_path_prob
-            parameters, net_flops, total_time_gpu, total_time_cpu = model_profiling(model, name)
-            row.append(parameters)
-            row.append(net_flops)
-            row.append(total_time_gpu)
-            row.append(total_time_cpu)
-        except Exception as e:
-            print(f"Error '{e}' while processing file {log.name}")
+            try:
+                # model profiling
+                genotype = genotypes.__dict__[arch]
+                match = re.search(r"init_channels=(?P<value>\d+)", local_lines)
+                init_channels = int(match.group("value"))
+                match = re.search(r"layers=(?P<value>\d+)", local_lines)
+                layers = int(match.group("value"))
+                match = re.search(r"drop_path_prob=(?P<value>\d+\.\d+)", local_lines)
+                drop_path_prob = float(match.group("value"))
+                match = re.search(r"auxiliary=(?P<value>\w+)", local_lines)
+                auxiliary = bool(match.group("value"))
+                model = NetworkCIFAR(init_channels, 10, layers, auxiliary, genotype)
+                model.cuda()
+                model.drop_path_prob = drop_path_prob
+                parameters, net_flops, total_time_gpu, total_time_cpu = model_profiling(model, arch)
+                row.append(parameters)
+                row.append(net_flops)
+                row.append(total_time_gpu)
+                row.append(total_time_cpu)
+            except Exception as e:
+                print(f"Error '{e}' while processing file {log.name}")
 
-        if len(row) > 0:
-            data.append(row)
+            if len(row) > 0:
+                data.append(row)
     df = pd.DataFrame(data, columns=[MODEL_NAME, WEIGHT, PARAMETERS_DARTS,
                                      TRAIN_LOSS, TRAIN_ACC,
                                      VALID_LOSS, VALID_ACC,
