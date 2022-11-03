@@ -9,14 +9,15 @@ from pandas import DataFrame
 from genotypes import Genotype
 from model import NetworkCIFAR
 from multiobjective import create_genotype_name
-from tools.analyse_train_logs import plot_columns, plot_correlation, model_profiling, LATENCY_CPU, WEIGHT
+from tools.analyse_train_logs import plot_columns, plot_correlation, model_profiling, LATENCY_CPU, WEIGHT, \
+    PARAMETERS_DARTS
 from tools.plot_frontier import filter_hist
 from train_search import L1_LOSS, L2_LOSS, TRAIN_ACC, VALID_ACC, CRITERION_LOSS, REG_LOSS, SIZE, GENOTYPE
 
 MODEL_NAME = "Model name"
 
-SEARCH_CRIT_LOSS = "Search criterion loss"
-SEARCH_REG_LOSS = "Search regularization loss"
+SEARCH_CRIT_LOSS = "Search crit loss"
+SEARCH_REG_LOSS = "Search reg loss"
 SEARCH_VAL_ACC = "Search valid acc"
 SEARCH_TRAIN_ACC = "Search train acc"
 FLOPS = "FLOPs"
@@ -109,9 +110,13 @@ if __name__ == '__main__':
         print(df)
 
     filename, file_extension = os.path.splitext(args.output)
-    plot_columns(df, SEARCH_REG_LOSS, SEARCH_CRIT_LOSS, f"{filename}_crit_vs_reg_loss.png", y_scale='linear',
-                 inches=args.inches)
+    plot_columns(df, SEARCH_REG_LOSS, SEARCH_CRIT_LOSS, f"{filename}_crit_vs_reg_loss.png", x_scale='linear',
+                 y_scale='linear', inches=args.inches,
+                 x_label='L1 loss',  # don't commit this line, it can be L2 as well
+                 y_label='Cross Entropy loss')
     plot_columns(df, WEIGHT, SEARCH_VAL_ACC, f"{filename}_weight_vs_valid_acc.png", y_scale='linear',
+                 inches=args.inches)
+    plot_columns(df, WEIGHT, PARAMETERS_DARTS, f"{filename}_weight_vs_params.png", y_scale='linear',
                  inches=args.inches)
 
     plot_correlation(df, f"{filename}_correlation_matrix.png")

@@ -14,7 +14,7 @@ from pandas import DataFrame
 import genotypes
 from genotypes import Genotype
 from model import NetworkCIFAR
-from multiobjective import get_cmap
+from multiobjective import get_cmap, round_number
 from train_search import L1_LOSS, L2_LOSS, TRAIN_ACC, VALID_ACC, CRITERION_LOSS, REG_LOSS
 
 WEIGHT = "Weight"
@@ -50,8 +50,10 @@ def plot_columns(df: DataFrame, x_column: str, y_column: str, filename="plot_tab
     Plot DataFrame columns
 
     :param df:
-    :param x_column: Column name to set as x-axis
-    :param y_column: Column name to set as y-axis
+    :param x_column: Column name to use as x-axis
+    :param x_label: Display name for x-axis
+    :param y_column: Column name to use as y-axis
+    :param y_label: Display name for y-axis
     :param filename: Save path
     :param negate: Negate the values and add it to some offset passed as int here
     :param x_scale: {"linear", "log", "symlog", "logit", ...} or `.ScaleBase`
@@ -65,7 +67,7 @@ def plot_columns(df: DataFrame, x_column: str, y_column: str, filename="plot_tab
     if isinstance(negate, (int, float)):
         x_axis = negate - x_axis.to_numpy()
         y_axis = negate - y_axis.to_numpy()
-    weights = df.loc[:, WEIGHT]
+    weights = df.loc[:, WEIGHT].to_list()
 
     # Plot the data
     cmap = get_cmap(len(y_axis))
@@ -74,9 +76,12 @@ def plot_columns(df: DataFrame, x_column: str, y_column: str, filename="plot_tab
         data = zip(x_axis, y_axis, weights)
         data = sorted(data, key=lambda tup: tup[2], reverse=True)
         for i, (x, y, w) in enumerate(data):
-            plt.scatter(x, y, color=cmap(i), label="$\\nu$ = %.0E" % w)
+            exponent, round_n = round_number(weights, w)
+            mantissa = round(round_n * pow(10, exponent))
+            # of the exponent because var names cant contain this char
+            plt.scatter(x, y, color=cmap(i), label="%de-%02d" % (mantissa, exponent))
         # Add a legend
-        plt.legend()
+        plt.legend(title='$\\nu$ value')
 
     else:
         plt.scatter(x_axis, y_axis, c=range(len(y_axis)), cmap=cmap)
@@ -105,7 +110,6 @@ def plot_correlation(df: DataFrame, filename="correlation_matrix.png"):
     data = np.abs(df.corr(method="spearman").to_numpy())
     plt.matshow(data, fignum=f.number)
     ax = plt.gca()
-    ax.axvline(4.5, 0.0, 1, linewidth=4, color="red", linestyle="solid")
 
     # legend
     columns = [name.get(column, column) for column in df.select_dtypes(['number']).columns]
@@ -114,17 +118,19 @@ def plot_correlation(df: DataFrame, filename="correlation_matrix.png"):
     plt.yticks(range(df.select_dtypes(['number']).shape[1]), columns, fontsize=14)
     plt.xticks(range(df.select_dtypes(['number']).shape[1]), columns, fontsize=14, rotation=45, ha="left",
                rotation_mode="anchor")
-    # Now let's add your additional information
-    ax.annotate('Search stage data',
-                xy=(190, -20), xytext=(0, 0),
-                xycoords=('axes points', 'axes points'),
-                textcoords='offset points',
-                size=14, ha='center', va='bottom')
-    ax.annotate('Evaluation stage data',
-                xy=(420, -20), xytext=(0, 0),
-                xycoords=('axes points', 'axes points'),
-                textcoords='offset points',
-                size=14, ha='center', va='bottom')
+    if any(c in df for c in [TEST_ACC, VALID_ACC, TEST_LOSS, VALID_LOSS]):
+        ax.axvline(4.5, 0.0, 1, linewidth=4, color="red", linestyle="solid")
+        # Now let's add your additional information
+        ax.annotate('Search stage data',
+                    xy=(190, -20), xytext=(0, 0),
+                    xycoords=('axes points', 'axes points'),
+                    textcoords='offset points',
+                    size=14, ha='center', va='bottom')
+        ax.annotate('Evaluation stage data',
+                    xy=(420, -20), xytext=(0, 0),
+                    xycoords=('axes points', 'axes points'),
+                    textcoords='offset points',
+                    size=14, ha='center', va='bottom')
 
 
     # colorbar
@@ -284,6 +290,9 @@ if __name__ == '__main__':
     plot_columns(df, WEIGHT, VALID_ACC, f"{filename}_weight_vs_valid_acc.png", y_scale='linear',
                  show_weights=not args.colorbar, show_colorbar=args.colorbar, inches=args.inches,
                  y_label="Valid acc (%)")
+    plot_columns(df, WEIGHT, TEST_ACC, f"{filename}_weight_vs_test_acc.png", y_scale='linear',
+                 show_weights=not args.colorbar, show_colorbar=args.colorbar, inches=args.inches,
+                 y_label="Test Acc (%)")
 
     clean_df = df.loc[:, np.invert(df.columns.isin([
         TRAIN_LOSS, TRAIN_ACC, VALID_LOSS, TEST_LOSS, SEARCH_REG_LOSS, SEARCH_CRIT_LOSS, PARAMETERS_OFA, LATENCY_CPU]))]

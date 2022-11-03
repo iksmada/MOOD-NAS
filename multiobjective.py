@@ -43,6 +43,15 @@ def plot_frontier(title: str, weight_est: WeightEstimator, save_path="", xlabel=
 def create_genotype_name(weights: np.ndarray, loss: str, weights_list: list) -> str:
     wl = weights[0]  # local weight
     assert wl in weights_list, f"The weight {wl} must be in the weight list"
+    exponent, round_n = round_number(weights_list, wl)
+    # remove the negative value of the exponent
+    mantissa = round(round_n * pow(10, exponent))
+    # it should be negative exponent, but we are removing the negative symbol (-)
+    # of the exponent because var names cant contain this char
+    return "%s_%de%02d" % (loss, mantissa, exponent)
+
+
+def round_number(weights_list, wl):
     number_of_digits = 1
     round_n = round_to_n(wl, number_of_digits)
     while number_of_digits <= 5:
@@ -55,12 +64,8 @@ def create_genotype_name(weights: np.ndarray, loss: str, weights_list: list) -> 
     if wl == 0:
         exponent = 0
     else:
-        # remove the negative value of the exponent
         exponent = -int(floor(log10(abs(wl)))) + (number_of_digits - 1)
-    mantissa = round(round_n * pow(10, exponent))
-    # it should be negative exponent, but we are removing the negative symbol (-)
-    # of the exponent because var names cant contain this char
-    return "%s_%de%02d" % (loss, mantissa, exponent)
+    return exponent, round_n
 
 
 def round_to_n(x: float, n: int) -> float:
