@@ -17,13 +17,14 @@ import torch.backends.cudnn as cudnn
 from torch.autograd import Variable
 from model import NetworkCIFAR as Network
 
-CIFAR_CLASSES = 10
-
-
 def main(args):
     if not torch.cuda.is_available():
         logging.info('no gpu device available')
         sys.exit(1)
+
+    CIFAR_CLASSES = 10
+    if args.set == 'cifar100':
+        CIFAR_CLASSES = 100
 
     np.random.seed(args.seed)
     torch.cuda.set_device(args.gpu)
@@ -99,12 +100,12 @@ def main(args):
     else:
         weights = torch.ones(len(models), device='cuda')
     logging.info('train final weights = %s', weights)
-
+    norm_weights = weights / weights.amax(dim=0)
     # scale weights per maximum value per class
-    test_acc, top5_acc, test_obj = infer(test_queue, models, criterion, weights / weights.amax(dim=0))
+    test_acc, top5_acc, test_obj = infer(test_queue, models, criterion, norm_weights, "test")
     logging.info('test loss %e, acc top1: %.2f, acc top5 %.2f', test_obj, test_acc, top5_acc)
 
-    train_acc, top5_acc, train_obj = infer(train_queue, models, criterion)
+    train_acc, top5_acc, train_obj = infer(train_queue, models, criterion, norm_weights, "train")
     logging.info('train loss %e, acc top1: %f, acc top5 %f', train_obj, train_acc, top5_acc)
 
 
@@ -133,7 +134,7 @@ def calc_ensemble(train_queue, models: dict, n_classes: int = None) -> torch.Ten
     return torch.stack(weights, dim=0).sum(dim=0)
 
 
-def infer(test_queue, models: dict, criterion, weights):
+def infer(test_queue, models: dict, criterion, weights, set_name="test"):
     # expand the weight to [1, n_models, n_classes(or 1)] dim then
     if len(weights.size()) == 1:
         weights = weights[None, :, None]
@@ -170,7 +171,7 @@ def infer(test_queue, models: dict, criterion, weights):
             top5.update(prec5.data.item(), n)
 
             if step % (len(test_queue) // args.report_lines) == 0:
-                logging.info('test %03d %e %f %f', step, objs.avg, top1.avg, top5.avg)
+                logging.info(f'{set_name} {step:03d} {objs.avg:e} {top1.avg:.2f} {top5.avg:.2f}')
 
     return top1.avg, top5.avg, objs.avg
 
@@ -185,7 +186,8 @@ def min_max_scaler(input):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser("ensemble")
     parser.add_argument('--data', type=str, default='data', help='location of the data corpus')
-    parser.add_argument('--set', type=str, default='cifar10', choices=['cifar10', 'cifar100'], help='location of the data corpus')
+    parser.add_argument('--set', type=str, default='cifar10', choices=['cifar10', 'cifar100'],
+                        help='corpus name')
     parser.add_argument('--batch_size', type=int, default=96, help='batch size')
     parser.add_argument('--report_lines', type=int, default=5, help='number of report lines per stage')
     parser.add_argument('--gpu', type=int, default=0, help='gpu device id')
@@ -202,7 +204,7 @@ if __name__ == '__main__':
     parser.add_argument('--models_folder', type=str, required=True, help='parent path of pretrained models')
     parser.add_argument('--calculate', action='store_true', default=False,
                         help='Calculate weights for ensemble based on training results')
-    parser.add_argument('--per_class', action='store_true', default=False, help='Emsemble per class')
+    parser.add_argument('--per_class', action='store_true', default=False, help='Ensemble per class')
     args = parser.parse_args()
 
     log_format = '%(asctime)s %(message)s'
