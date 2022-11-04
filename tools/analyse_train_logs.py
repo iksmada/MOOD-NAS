@@ -61,6 +61,10 @@ def plot_columns(df: DataFrame, x_column: str, y_column: str, filename="plot_tab
     :param show_weights: Show detailed weight values instead of colorbar
     :param inches: Figure dimension width x height tuple in inches
     """
+    if x_column not in df or y_column not in df:
+        print(f"Can't plot {x_column} vs {y_column} because one or both is missing on the data table")
+        return
+
     plt.clf()
     x_axis = df.loc[:, x_column]
     y_axis = df.loc[:, y_column]
@@ -175,7 +179,10 @@ def process_logs(args) -> DataFrame:
                 param_size = float(match.group("value"))
                 row.append(param_size)
                 for metric in [TRAIN_LOSS, TRAIN_ACC, VALID_LOSS, VALID_ACC, TEST_LOSS, TEST_ACC]:
-                    value = float(re.findall(rf'{metric}(?:uracy)? (?P<value>\d*\.\d+)', local_lines)[-1])
+                    metric_all = re.findall(rf'{metric}(?:uracy)? (?P<value>\d*\.\d+)', local_lines)
+                    value = None
+                    if metric_all:
+                        value = float(metric_all[-1])
                     row.append(value)
             except Exception as e:
                 print(f"Error '{e}' while processing file {log.name}")
@@ -250,6 +257,8 @@ def process_logs(args) -> DataFrame:
                                      LATENCY_GPU, LATENCY_CPU])
     df.set_index(keys=MODEL_NAME, inplace=True)
     df.sort_values(by=WEIGHT, inplace=True, ascending=False)
+    # remove None/null columns because missing on logs or due to errors
+    df.dropna(axis=1, how='all', inplace=True)
     pd.set_option("display.max_rows", None, "display.max_columns", None, "display.width", None)
     print(df)
     df.to_csv(args.output)
@@ -306,5 +315,5 @@ if __name__ == '__main__':
 
     clean_df = df.loc[:, np.invert(df.columns.isin([
         TRAIN_LOSS, TRAIN_ACC, VALID_LOSS, TEST_LOSS, SEARCH_REG_LOSS, SEARCH_CRIT_LOSS, PARAMETERS_OFA, LATENCY_CPU]))]
-    clean_df = clean_df[[WEIGHT, PARAMETERS_DARTS, FLOPS, LATENCY_GPU, SEARCH_ACC, VALID_ACC, TEST_ACC]]
+    clean_df = clean_df.filter([WEIGHT, PARAMETERS_DARTS, FLOPS, LATENCY_GPU, SEARCH_ACC, VALID_ACC, TEST_ACC])
     plot_correlation(clean_df, f"{filename}_correlation_matrix.png")
