@@ -100,6 +100,7 @@ if __name__ == '__main__':
     input_group.add_argument("-d", "--data", type=argparse.FileType('r'), help="Csv table generated from this code")
     parser.add_argument("-o", "--output", type=str, required=False, help="Output file name", default="search_table.csv")
     parser.add_argument("-i", "--inches", type=float, help="Image size in inches", nargs='+', default=[6.4, 4.8])
+    parser.add_argument("-t", "--topk", type=float, help="Top number of weights to highlight", nargs='+', default=0)
     args = parser.parse_args()
 
     if args.data is None:
@@ -113,11 +114,12 @@ if __name__ == '__main__':
     plot_columns(df, SEARCH_REG_LOSS, SEARCH_CRIT_LOSS, f"{filename}_crit_vs_reg_loss.png", x_scale='linear',
                  y_scale='linear', inches=args.inches,
                  x_label='L1 loss',  # don't commit this line, it can be L2 as well
-                 y_label='Cross Entropy loss')
+                 y_label='Cross Entropy loss',
+                 topk=5)
     plot_columns(df, WEIGHT, SEARCH_VAL_ACC, f"{filename}_weight_vs_valid_acc.png", y_scale='linear',
-                 inches=args.inches)
+                 inches=args.inches, topk=args.topk)
     plot_columns(df, WEIGHT, PARAMETERS_DARTS, f"{filename}_weight_vs_params.png", y_scale='linear',
-                 inches=args.inches)
+                 inches=args.inches, topk=args.topk)
 
     plot_correlation(df, f"{filename}_correlation_matrix.png")
 

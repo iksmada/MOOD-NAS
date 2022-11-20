@@ -45,7 +45,7 @@ name = {
 
 def plot_columns(df: DataFrame, x_column: str, y_column: str, filename="plot_table.png", negate: int = None,
                  x_scale='log', y_scale='log', show_weights: bool = True, show_colorbar=False,
-                 inches: tuple = (6.4, 4.8), x_label: str = None, y_label: str = None):
+                 inches: tuple = (6.4, 4.8), x_label: str = None, y_label: str = None, topk: int = 0):
     """
     Plot DataFrame columns
 
@@ -60,6 +60,7 @@ def plot_columns(df: DataFrame, x_column: str, y_column: str, filename="plot_tab
     :param y_scale: {"linear", "log", "symlog", "logit", ...} or `.ScaleBase`
     :param show_weights: Show detailed weight values instead of colorbar
     :param inches: Figure dimension width x height tuple in inches
+    :param topk: tok k items to use X marker instead of circle
     """
     if x_column not in df or y_column not in df:
         print(f"Can't plot {x_column} vs {y_column} because one or both is missing on the data table")
@@ -82,8 +83,11 @@ def plot_columns(df: DataFrame, x_column: str, y_column: str, filename="plot_tab
         for i, (x, y, w) in enumerate(data):
             exponent, round_n = round_number(weights, w)
             mantissa = round(round_n * pow(10, exponent))
-            # of the exponent because var names cant contain this char
-            plt.scatter(x, y, color=cmap(i), label="%de-%02d" % (mantissa, exponent))
+            if len(data) - 1 - i < topk:
+                marker = "x"
+            else:
+                marker = "o"
+            plt.scatter(x, y, color=cmap(i), marker=marker, label="%de-%02d" % (mantissa, exponent))
         # Add a legend
         plt.legend(title='$\\nu$ value')
 
