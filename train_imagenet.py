@@ -3,6 +3,8 @@ import sys
 import numpy as np
 import time
 import torch
+from torch.utils.data import DataLoader
+
 import utils
 import glob
 import random
@@ -32,27 +34,17 @@ parser.add_argument('--layers', type=int, default=14, help='total number of laye
 parser.add_argument('--auxiliary', action='store_true', default=False, help='use auxiliary tower')
 parser.add_argument('--auxiliary_weight', type=float, default=0.4, help='weight for auxiliary loss')
 parser.add_argument('--drop_path_prob', type=float, default=0, help='drop path probability')
-parser.add_argument('--save', type=str, default='tmp/checkpoints/', help='experiment name')
+parser.add_argument('--save', type=str, help='experiment name')
 parser.add_argument('--seed', type=int, default=0, help='random seed')
-parser.add_argument('--arch', type=str, default='PCDARTS', help='which architecture to use')
+parser.add_argument('--arch', type=str, default='PC_DARTS_image', help='which architecture to use')
 parser.add_argument('--grad_clip', type=float, default=5., help='gradient clipping')
 parser.add_argument('--label_smooth', type=float, default=0.1, help='label smoothing')
 parser.add_argument('--lr_scheduler', type=str, default='linear', help='lr scheduler, linear or cosine')
-parser.add_argument('--tmp_data_dir', type=str, default='/tmp/cache/', help='temp data dir')
+parser.add_argument('--tmp_data_dir', type=str, default='data', help='temp data dir')
 parser.add_argument('--note', type=str, default='try', help='note for this run')
 
 
 args, unparsed = parser.parse_known_args()
-
-args.save = '{}eval-{}-{}'.format(args.save, args.note, time.strftime("%Y%m%d-%H%M%S"))
-utils.create_exp_dir(args.save, scripts_to_save=glob.glob('*.py'))
-
-log_format = '%(asctime)s %(message)s'
-logging.basicConfig(stream=sys.stdout, level=logging.INFO,
-    format=log_format, datefmt='%m/%d %I:%M:%S %p')
-fh = logging.FileHandler(os.path.join(args.save, 'log.txt'))
-fh.setFormatter(logging.Formatter(log_format))
-logging.getLogger().addHandler(fh)
 
 CLASSES = 1000
 
@@ -71,21 +63,34 @@ class CrossEntropyLabelSmooth(nn.Module):
         loss = (-targets * log_probs).mean(0).sum()
         return loss
 
-def main():
+
+def main(force_log=False):
+    log_path = 'logs/eval-imagenet-{}-{}'.format(args.arch if args.save is None else args.save, time.strftime("%Y%m%d-%H%M%S"))
+    utils.create_exp_dir(log_path, scripts_to_save=None)
+
+    log_format = '%(asctime)s %(message)s'
+    logging.basicConfig(stream=sys.stdout, level=logging.INFO,
+                        format=log_format, datefmt='%m/%d %H:%M:%S', force=force_log)
+    fh = logging.FileHandler(os.path.join(log_path, 'log.txt'))
+    fh.setFormatter(logging.Formatter(log_format))
+    logging.getLogger().addHandler(fh)
+
+    global log
+    log = logging.getLogger("train_imagenet")
     if not torch.cuda.is_available():
-        logging.info('No GPU device available')
+        log.info('No GPU device available')
         sys.exit(1)
     np.random.seed(args.seed)
     cudnn.benchmark = True
     torch.manual_seed(args.seed)
     cudnn.enabled=True
     torch.cuda.manual_seed(args.seed)
-    logging.info("args = %s", args)
-    logging.info("unparsed_args = %s", unparsed)
+    log.info("args = %s", args)
+    log.info("unparsed_args = %s", unparsed)
     num_gpus = torch.cuda.device_count()   
     genotype = eval("genotypes.%s" % args.arch)
     print('---------Genotype---------')
-    logging.info(genotype)
+    log.info(genotype)
     print('--------------------------') 
     model = Network(args.init_channels, CLASSES, args.layers, args.auxiliary, genotype)
     if num_gpus > 1:
@@ -93,7 +98,7 @@ def main():
         model = model.cuda()
     else:
         model = model.cuda()
-    logging.info("param size = %fMB", utils.count_parameters_in_MB(model))
+    log.info("param size = %fMB", utils.count_parameters_in_MB(model))
 
     criterion = nn.CrossEntropyLoss()
     criterion = criterion.cuda()
@@ -108,7 +113,17 @@ def main():
         )
     data_dir = os.path.join(args.tmp_data_dir, 'imagenet')
     traindir = os.path.join(data_dir, 'train')
+    if not os.path.exists(traindir):
+        msg = ("The dataset is no longer publicly accessible. You need to "
+               f"download the archives externally and place them in the {data_dir} "
+               "directory.")
+        raise RuntimeError(msg)
     validdir = os.path.join(data_dir, 'val')
+    if not os.path.exists(validdir):
+        msg = ("The dataset is no longer publicly accessible. You need to "
+               f"download the archives externally and place them in the {data_dir} "
+               "directory.")
+        raise RuntimeError(msg)
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     train_data = dset.ImageFolder(
         traindir,
@@ -132,10 +147,10 @@ def main():
             normalize,
         ]))
 
-    train_queue = torch.utils.data.DataLoader(
+    train_queue = DataLoader(
         train_data, batch_size=args.batch_size, shuffle=True, pin_memory=True, num_workers=args.workers)
 
-    valid_queue = torch.utils.data.DataLoader(
+    valid_queue = DataLoader(
         valid_data, batch_size=args.batch_size, shuffle=False, pin_memory=True, num_workers=args.workers)
 
 #    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.decay_period, gamma=args.gamma)
@@ -152,24 +167,24 @@ def main():
         else:
             print('Wrong lr type, exit')
             sys.exit(1)
-        logging.info('Epoch: %d lr %e', epoch, current_lr)
+        log.info('Epoch: %d lr %e', epoch, current_lr)
         if epoch < 5 and args.batch_size > 256:
             for param_group in optimizer.param_groups:
                 param_group['lr'] = lr * (epoch + 1) / 5.0
-            logging.info('Warming-up Epoch: %d, LR: %e', epoch, lr * (epoch + 1) / 5.0)
+            log.info('Warming-up Epoch: %d, LR: %e', epoch, lr * (epoch + 1) / 5.0)
         if num_gpus > 1:
             model.module.drop_path_prob = args.drop_path_prob * epoch / args.epochs
         else:
             model.drop_path_prob = args.drop_path_prob * epoch / args.epochs
         epoch_start = time.time()
         train_acc, train_obj = train(train_queue, model, criterion_smooth, optimizer)
-        logging.info('Train_acc: %f', train_acc)
+        log.info('Train_acc: %f', train_acc)
 
         valid_acc_top1, valid_acc_top5, valid_obj = infer(valid_queue, model, criterion)
-        logging.info('Valid_acc_top1: %f', valid_acc_top1)
-        logging.info('Valid_acc_top5: %f', valid_acc_top5)
+        log.info('Valid_acc_top1: %f', valid_acc_top1)
+        log.info('Valid_acc_top5: %f', valid_acc_top5)
         epoch_duration = time.time() - epoch_start
-        logging.info('Epoch time: %ds.', epoch_duration)
+        log.info('Epoch time: %ds.', epoch_duration)
         is_best = False
         if valid_acc_top5 > best_acc_top5:
             best_acc_top5 = valid_acc_top5
@@ -229,7 +244,7 @@ def train(train_queue, model, criterion, optimizer):
             else:
                 duration = end_time - start_time
                 start_time = time.time()
-            logging.info('TRAIN Step: %03d Objs: %e R1: %f R5: %f Duration: %ds BTime: %.3fs', 
+            log.info('TRAIN Step: %03d Objs: %e R1: %f R5: %f Duration: %ds BTime: %.3fs',
                                     step, objs.avg, top1.avg, top5.avg, duration, batch_time.avg)
 
     return top1.avg, objs.avg
@@ -262,7 +277,7 @@ def infer(valid_queue, model, criterion):
             else:
                 duration = end_time - start_time
                 start_time = time.time()
-            logging.info('VALID Step: %03d Objs: %e R1: %f R5: %f Duration: %ds', step, objs.avg, top1.avg, top5.avg, duration)
+            log.info('VALID Step: %03d Objs: %e R1: %f R5: %f Duration: %ds', step, objs.avg, top1.avg, top5.avg, duration)
 
     return top1.avg, top5.avg, objs.avg
 

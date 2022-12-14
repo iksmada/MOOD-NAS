@@ -1,3 +1,4 @@
+import argparse
 import logging
 import os
 import sys
@@ -10,8 +11,9 @@ import matplotlib.pyplot as plt
 
 import utils
 import train_search
+import train_search_imagenet
 from WeightEstimator import WeightEstimator
-from train_search import create_parser, L1_LOSS, L2_LOSS, CRITERION_LOSS, REG_LOSS, GENOTYPE
+from train_search import L1_LOSS, L2_LOSS, CRITERION_LOSS, REG_LOSS, GENOTYPE
 
 
 def get_cmap(n, name='gist_rainbow'):
@@ -83,7 +85,12 @@ def round_to_n(x: float, n: int) -> float:
 
 if __name__ == '__main__':
     log = logging.getLogger("multiobjective")
-    parser = create_parser()
+    parser = argparse.ArgumentParser("multiobjective")
+    subparsers = parser.add_subparsers(help='sub-command help', required=True)
+    imagenet_parser = subparsers.add_parser("imagenet")
+    train_search_imagenet.create_parser(imagenet_parser)
+    cifar_parser = subparsers.add_parser("cifar")
+    train_search.create_parser(cifar_parser)
     parser.add_argument('-o', '--objective', type=str, required=True, choices={"l1", "l2"},
                         help='Set the second objective to optimize')
     parser.add_argument('-d', '--delta', type=float, required=False, default=0.15,
@@ -91,7 +98,7 @@ if __name__ == '__main__':
                              ' populating it.')
     args = parser.parse_args()
 
-    args.save = 'logs/multi-search-{}-{}'.format(args.save, time.strftime("%Y%m%d-%H%M%S"))
+    args.save = 'logs/multi-search-{}-{}-{}'.format(args.set, args.save, time.strftime("%Y%m%d-%H%M%S"))
     utils.create_exp_dir(args.save, scripts_to_save=None)
     log_format = '%(asctime)s %(name)s - %(message)s'
     logging.basicConfig(stream=sys.stdout, level=logging.INFO,
@@ -123,8 +130,11 @@ if __name__ == '__main__':
             args.l1_weight = weight[0]
             args.l2_weight = -1
 
-        # do the training, about 2,5 hours
-        stats = train_search.main(args)
+        if args.set == "imagenet":
+            stats = train_search_imagenet.main(args)
+        else:
+            # do the training, about 2,5 hours
+            stats = train_search.main(args)
 
         log.info("stats = %s", stats)
         for key in stats.keys():

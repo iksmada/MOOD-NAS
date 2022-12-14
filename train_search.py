@@ -241,10 +241,9 @@ def infer(valid_queue, model, criterion, report_lines):
     return top1.avg, objs.avg
 
 
-def create_parser():
-    parser = argparse.ArgumentParser("train_search")
+def create_parser(parser=argparse.ArgumentParser("train_search")):
     parser.add_argument('--data', type=str, default='data', help='location of the data corpus')
-    parser.add_argument('--set', type=str, default='cifar10', choices=['cifar10', 'cifar100'], help='location of the data corpus')
+    parser.add_argument('--set', type=str, default='cifar10', choices=['cifar10', 'cifar100'])
     parser.add_argument('--batch_size', type=int, default=256, help='batch size')
     parser.add_argument('--learning_rate', type=float, default=0.1, help='init learning rate')
     parser.add_argument('--learning_rate_min', type=float, default=0.001, help='min learning rate')
