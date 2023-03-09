@@ -3,7 +3,7 @@ One network for each mood.
 
 ## Introduction
 
-**MOOD NAS** (MultiObjective Optimization Differentiable Neural Architecture Search) explore the common neglected conflicting objectives on NAS formulation. This way focuses on gradually adding regularization (complexity measure) strength to the model, thus filling an approximation of the Pareto frontier with efficient learning models exhibiting distinct trade-offs between error and model complexity. ~~For a detailed description of technical details and experimental results, please refer to our paper: MultiObjective Differentiable Neural Architecture Search~~ TBD
+**MOOD NAS** (MultiObjective Optimization Differentiable Neural Architecture Search) explore the common neglected conflicting objectives on NAS formulation. This way focuses on gradually adding regularization (complexity measure) strength to the model, thus filling an approximation of the Pareto frontier with efficient learning models exhibiting distinct trade-offs between error and model complexity. For a detailed description of technical details and experimental results, please refer to our Thesis: [MultiObjective Differentiable Neural Architecture Search](https://repositorio.unicamp.br/Acervo/Detalhe/1243400)
 
 Authors: [Raphael Adamski](https://www.linkedin.com/in/iksmada/?locale=en_US), [Marcos Medeiros Raimundo](https://marcosmrai.github.io/), [Fernando Jose Von Zuben](https://www.dca.fee.unicamp.br/~vonzuben/).
 
@@ -125,9 +125,18 @@ The `log_folder` should be a path to a folder containing evaluation log sub fold
 
 ## Reference
 
-If you use our code in your research, please cite our paper accordingly.
+If you use our code in your research, please cite our Thesis accordingly.
 
-TDB
+```
+@mastersthesis{
+    Adamski2022,
+    author = {Adamski, Raphael and Raimundo, Marcos Medeiros and Von Zuben, Fernando José},
+    title   = "Multi-objective differentiable neural architecture search",
+    school  = "School of Electrical and Computer Engineering, University of Campinas",
+    year    = "2022",
+    url = {https://hdl.handle.net/20.500.12733/4482}
+}
+```
 
 ## Appendix
 
