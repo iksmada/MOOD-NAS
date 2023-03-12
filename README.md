@@ -3,7 +3,7 @@ One network for each mood.
 
 ## Introduction
 
-**MOOD NAS** (MultiObjective Optimization Differentiable Neural Architecture Search) explore the common neglected conflicting objectives on NAS formulation. This way focuses on gradually adding regularization (complexity measure) strength to the model, thus filling an approximation of the Pareto frontier with efficient learning models exhibiting distinct trade-offs between error and model complexity. For a detailed description of technical details and experimental results, please refer to our Thesis: [MultiObjective Differentiable Neural Architecture Search](https://repositorio.unicamp.br/Acervo/Detalhe/1243400)
+**MOOD-NAS** (Multi-objective Optimization Differentiable Neural Architecture Search) explore the common neglected conflicting objectives on NAS formulation. This way focuses on gradually adding regularization (complexity measure) strength to the model, thus filling an approximation of the Pareto frontier with efficient learning models exhibiting distinct trade-offs between error and model complexity. For a detailed description of technical details and experimental results, please refer to our Thesis: [Multi-objective Differentiable Neural Architecture Search](https://repositorio.unicamp.br/Acervo/Detalhe/1243400)
 
 Authors: [Raphael Adamski](https://www.linkedin.com/in/iksmada/?locale=en_US), [Marcos Medeiros Raimundo](https://marcosmrai.github.io/), [Fernando Jose Von Zuben](https://www.dca.fee.unicamp.br/~vonzuben/).
 
