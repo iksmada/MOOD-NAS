@@ -113,7 +113,7 @@ if __name__ == '__main__':
     filename, file_extension = os.path.splitext(args.output)
     plot_columns(df, SEARCH_REG_LOSS, SEARCH_CRIT_LOSS, f"{filename}_crit_vs_reg_loss.png", x_scale='linear',
                  y_scale='linear', inches=args.inches,
-                 x_label='L1 loss',  # don't commit this line, it can be L2 as well
+                 x_label='Regularization loss',
                  y_label='Cross Entropy loss',
                  topk=5)
     plot_columns(df, WEIGHT, SEARCH_VAL_ACC, f"{filename}_weight_vs_valid_acc.png", y_scale='linear',

@@ -89,7 +89,7 @@ python batch_train.py --archs CODE [CODE ...] --train_portion 1.0\\
 ```
 
 The `CODE` should be a variable name on genotypes.py file (e.g. `PC_DARTS_cifar` or `l2_loss_2e01`). Other parameters are compatible with `python train.py` original arguments.
-The `--train_portion` controls the train/validation portion. 0.9 for instance use 90% of data for training ans 10% for validation.
+The `--train_portion` controls the train/validation portion. 0.9 for instance use 90% of data for training ans 10% for validation. For this case the validation is used only to log the accuracy in the validation set. No decision or stopping criterion is made based on it.
 
 #### Make the model selection
 
